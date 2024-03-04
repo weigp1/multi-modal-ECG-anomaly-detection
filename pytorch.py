@@ -1,87 +1,118 @@
 import os
 import torch
-from matplotlib import pyplot as plt
-from torch.nn import functional as F
-from torch.utils.data import DataLoader
-from torchvision import transforms
-from torchvision.datasets import MNIST
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
 import pytorch_lightning as pl
-from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_curve, auc
+from torchmetrics.classification import Accuracy  # 添加Accuracy metric
+from preprocessing.loading import load_data
 
 
-def calculate_metrics(y_true, y_pred):
-    # 计算Accuracy
-    accuracy = accuracy_score(y_true, y_pred)
-    print("Accuracy:", accuracy)
+# 定义Lightning模块
+class BiLSTMModel(pl.LightningModule):
+    def __init__(self, input_shape):
+        super(BiLSTMModel, self).__init__()
 
-    # 计算Precision
-    precision = precision_score(y_true, y_pred)
-    print("Precision:", precision)
+        # 原始流模型
+        self.raw_lstm = nn.LSTM(input_size=input_shape[0], hidden_size=128, bidirectional=True)
+        self.raw_fc = nn.Sequential(
+            nn.Linear(256, 64),
+            nn.ReLU(),
+            nn.Linear(64, 5)
+        )
 
-    # 计算Recall
-    recall = recall_score(y_true, y_pred)
-    print("Recall:", recall)
+        # 特征流模型
+        self.feat_lstm = nn.LSTM(input_size=2*input_shape[0], hidden_size=128, bidirectional=True)
+        self.feat_fc = nn.Sequential(
+            nn.Linear(256, 64),
+            nn.ReLU(),
+            nn.Linear(64, 5)
+        )
 
-    # 计算ROC和AUC
-    fpr, tpr, thresholds = roc_curve(y_true, y_pred)
-    roc_auc = auc(fpr, tpr)
-    print("AUC:", roc_auc)
+        # 合并两个流的输出
+        self.avg_pooling = nn.AdaptiveAvgPool1d(1)
 
-    # 绘制ROC曲线
-    plt.figure()
-    plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
-    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic')
-    plt.legend(loc="lower right")
-    plt.show()
+        self.accuracy = Accuracy(task='multiclass', num_classes=5)
 
+    def forward(self, raw_input, feat_input):
+        raw_out, _ = self.raw_lstm(raw_input.permute(0, 2, 1))
+        raw_out = self.raw_fc(raw_out[:, -1, :])
 
-class LitSimpleCNN(pl.LightningModule):
-    def __init__(self):
-        super(LitSimpleCNN, self).__init__()
-        self.conv1 = torch.nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = torch.nn.Conv2d(10, 20, kernel_size=5)
-        self.conv2_drop = torch.nn.Dropout2d()
-        self.fc1 = torch.nn.Linear(320, 50)
-        self.fc2 = torch.nn.Linear(50, 10)
+        feat_out, _ = self.feat_lstm(feat_input.permute(0, 2, 1))
+        feat_out = self.feat_fc(feat_out[:, -1, :])
 
-    def forward(self, x):
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        x = x.view(-1, 320)
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, training=self.training)
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        # 合并两个流的输出
+        combined_out = self.avg_pooling(raw_out.unsqueeze(2) + feat_out.unsqueeze(2)).squeeze(2)
 
-    def configure_optimizers(self):
-        return torch.optim.SGD(self.parameters(), lr=0.01, momentum=0.5)
+        return combined_out
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x)
-        loss = F.nll_loss(logits, y)
-        preds = torch.argmax(logits, dim=1)
-        acc = accuracy_score(y, preds)
-        self.log('train_loss', loss)
-        self.log('train_acc', acc, on_step=True, on_epoch=True, prog_bar=True)
+        X_train, X_train_H, y_train = batch
+        output = self(X_train, X_train_H)
+        loss = nn.CrossEntropyLoss()(output, y_train)
         return loss
 
+    def validation_step(self, batch, batch_idx):
+        X_val, X_val_H, y_val = batch
+        output = self(X_val, X_val_H)
+        loss = nn.CrossEntropyLoss()(output, y_val)
+        preds = torch.argmax(output, dim=1)
+        acc = self.accuracy(preds, y_val)
+        self.log('val_loss', loss, prog_bar=True)
+        self.log('val_acc', acc, prog_bar=True)
+        return loss
 
-# 设置数据
-dataset = MNIST(os.getcwd(), download=True, transform=transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.1307,), (0.3081,))
-]))
-train_loader = DataLoader(dataset, batch_size=64, shuffle=True)
+    def test_step(self, batch, batch_idx):
+        X_test, X_test_H, y_test = batch
+        output = self(X_test, X_test_H)
+        loss = nn.CrossEntropyLoss()(output, y_test)
+        preds = torch.argmax(output, dim=1)
+        acc = self.accuracy(preds, y_test)
+        self.log('test_loss', loss, prog_bar=True)
+        self.log('test_acc', acc, prog_bar=True)
+        return loss
 
-# 初始化PyTorch Lightning模型
-model = LitSimpleCNN()
+    def configure_optimizers(self):
+        return optim.Adam(self.parameters(), lr=0.001)
 
-# 训练模型
-trainer = pl.Trainer(max_epochs=10)
-trainer.fit(model, train_loader)
+
+if __name__ == '__main__':
+    # 训练和测试数据集
+    X_train, X_test, X_train_H, X_test_H, y_train, y_test = load_data('mitdb')
+    project_path = "./"
+    model_path = project_path + "ecg_model.pth"
+
+    # 转换为PyTorch张量
+    X_train = torch.from_numpy(X_train).float()
+    X_train_H = torch.from_numpy(X_train_H).float()
+    y_train = torch.from_numpy(y_train).long()
+
+    X_test = torch.from_numpy(X_test).float()
+    X_test_H = torch.from_numpy(X_test_H).float()
+    y_test = torch.from_numpy(y_test).long()
+
+    # 创建DataLoader
+    train_dataset = TensorDataset(X_train, X_train_H, y_train)
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+
+    # 初始化Lightning模型
+    raw_input_shape = (X_train.shape[1], X_train.shape[2])
+    model = BiLSTMModel(raw_input_shape)
+
+    # 创建PyTorch Lightning训练器
+    trainer = pl.Trainer(max_epochs=5)
+
+    if os.path.exists(model_path):
+        model.load_state_dict(torch.load(model_path))
+    else:
+        # 训练模型
+        trainer.fit(model, train_loader)
+        # 保存训练好的模型
+        torch.save(model.state_dict(), model_path)
+
+    model.eval()
+    # 创建测试集的DataLoader
+    test_dataset = TensorDataset(X_test, X_test_H, y_test)
+    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+    # 用DataLoader评估模型
+    trainer.test(model, test_loader)
