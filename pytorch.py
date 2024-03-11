@@ -1,10 +1,12 @@
 import os
+from collections import Counter
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import pytorch_lightning as pl
-from torchmetrics.classification import Accuracy  # 添加Accuracy metric
+from torchmetrics.classification import Accuracy, Precision, Recall
 from preprocessing.loading import load_data
 
 
@@ -22,7 +24,7 @@ class BiLSTMModel(pl.LightningModule):
         )
 
         # 特征流模型
-        self.feat_lstm = nn.LSTM(input_size=2*input_shape[0], hidden_size=128, bidirectional=True)
+        self.feat_lstm = nn.LSTM(input_size=2 * input_shape[0], hidden_size=128, bidirectional=True)
         self.feat_fc = nn.Sequential(
             nn.Linear(256, 64),
             nn.ReLU(),
@@ -32,7 +34,9 @@ class BiLSTMModel(pl.LightningModule):
         # 合并两个流的输出
         self.avg_pooling = nn.AdaptiveAvgPool1d(1)
 
-        self.accuracy = Accuracy(task='multiclass', num_classes=5)
+        self.accuracy = Accuracy(task='multiclass', num_classes=3)
+        self.precision = Precision(task='multiclass', num_classes=3)
+        self.recall = Recall(task='multiclass', num_classes=3)
 
     def forward(self, raw_input, feat_input):
         raw_out, _ = self.raw_lstm(raw_input.permute(0, 2, 1))
@@ -68,8 +72,12 @@ class BiLSTMModel(pl.LightningModule):
         loss = nn.CrossEntropyLoss()(output, y_test)
         preds = torch.argmax(output, dim=1)
         acc = self.accuracy(preds, y_test)
+        pre = self.precision(preds, y_test)
+        re = self.recall(preds, y_test)
         self.log('test_loss', loss, prog_bar=True)
-        self.log('test_acc', acc, prog_bar=True)
+        self.log('test_accuracy', acc, prog_bar=True)
+        self.log('test_precision', pre, prog_bar=True)
+        self.log('test_recall', re, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
@@ -79,7 +87,11 @@ class BiLSTMModel(pl.LightningModule):
 if __name__ == '__main__':
     # 训练和测试数据集
     X_train, X_test, X_train_H, X_test_H, y_train, y_test = load_data('mitdb')
-    project_path = "./"
+    abnormal_types = Counter(y_train)
+    print(abnormal_types.keys(), abnormal_types.values())
+    abnormal_types = Counter(y_test)
+    print(abnormal_types.keys(), abnormal_types.values())
+    project_path = "./models/"
     model_path = project_path + "ecg_model.pth"
 
     # 转换为PyTorch张量
@@ -100,7 +112,7 @@ if __name__ == '__main__':
     model = BiLSTMModel(raw_input_shape)
 
     # 创建PyTorch Lightning训练器
-    trainer = pl.Trainer(max_epochs=5)
+    trainer = pl.Trainer(max_epochs=10)
 
     if os.path.exists(model_path):
         model.load_state_dict(torch.load(model_path))
