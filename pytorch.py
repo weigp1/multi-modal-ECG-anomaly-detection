@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import pytorch_lightning as pl
-from torchmetrics.classification import Accuracy, Precision, Recall
+from torchmetrics import Accuracy, Precision, Recall
 from preprocessing.loading import load_data
 
 
@@ -34,9 +34,9 @@ class BiLSTMModel(pl.LightningModule):
         # 合并两个流的输出
         self.avg_pooling = nn.AdaptiveAvgPool1d(1)
 
-        self.accuracy = Accuracy(task='multiclass', num_classes=3)
-        self.precision = Precision(task='multiclass', num_classes=3)
-        self.recall = Recall(task='multiclass', num_classes=3)
+        self.accuracy = Accuracy(task='multiclass', num_classes=3, average='macro')
+        self.precision = Precision(task='multiclass', num_classes=3, average='macro')
+        self.recall = Recall(task='multiclass', num_classes=3, average='macro')
 
     def forward(self, raw_input, feat_input):
         raw_out, _ = self.raw_lstm(raw_input.permute(0, 2, 1))
