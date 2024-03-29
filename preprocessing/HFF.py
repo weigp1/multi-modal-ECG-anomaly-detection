@@ -3,6 +3,7 @@ import pywt
 import numpy as np
 from scipy.stats import kurtosis, skew
 
+from hfd import HFD
 from matplotlib import pyplot as plt
 from spectrum import arburg
 
@@ -118,7 +119,7 @@ def get_data_set(number, X_data, Y_data, featSet):
             feat_ar = np.array(ARC(x_train))
             feat_se = np.array([SE(x_train)])
             feat_wv = np.array(WV(x_train))
-            feat_hfd = np.array([hfd.hfd(x_train)])
+            feat_hfd = np.array([HFD(x_train)])
 
             featSet.append(np.concatenate((feat_sf ,feat_ar, feat_se, feat_wv, feat_hfd), axis=None))
             i += 1
