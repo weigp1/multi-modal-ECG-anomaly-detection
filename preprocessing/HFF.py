@@ -1,15 +1,70 @@
-from datetime import datetime
-
-import pandas as pd
 import wfdb
 import pywt
 import numpy as np
-from sklearn import linear_model
-from concurrent.futures import ThreadPoolExecutor
+from scipy.stats import kurtosis, skew
 
-name = "mitdb"
+from matplotlib import pyplot as plt
+from spectrum import arburg
 
 
+# 测试集比例
+RATIO = 0.3
+# 随机种子
+RANDOM_SEED = 42
+# 数据标签
+ecgClassSet = ['N', 'A', 'V', 'L', 'R']
+
+# 香农小波熵
+def SE(data):
+    # 使用DB小波函数
+    coeffs = pywt.wavedec(data, 'db1', level=4)
+
+    # 计算能量概率分布
+    s_coeffs = [np.square(np.abs(coeff)) for coeff in coeffs]
+    total_energy = np.sum(np.concatenate(s_coeffs))
+    probabilities = [s_coeff / total_energy for s_coeff in s_coeffs]
+
+    # 计算小波香农熵
+    entropy = 0
+    for probability in probabilities:
+        entropy -= np.sum(probability * np.log2(probability + 1e-10))
+
+    return entropy
+
+# 小波方差
+def WV(data):
+    # 小波分解
+    coeffs = pywt.swt(data, 'db2', level=2, norm=True)
+
+    # 计算小波方差
+    wavelet_var = []
+    for coeff in coeffs:
+        variances = [(w**2).mean() for w in coeff]
+        wavelet_var.extend(variances)
+
+    return wavelet_var
+
+
+# AR系数
+def ARC(data, order=32):
+    # 计算自回归（AR）系数
+    coefficients, _, _ = arburg(data, order)
+    coefficients = coefficients.real.astype(float)
+    return coefficients
+
+
+# 静态特征
+def SF(data):
+    # 五个静态特征分别为: 平均值、标准差、中位数、峰度、偏度
+    Mean = np.mean(data)
+    Std = np.std(data)
+    Med = np.median(data)
+    Kurt = kurtosis(data)
+    Skew =  skew(data)
+    return np.array([Mean, Std, Med, Kurt, Skew])
+
+
+# 实现小波去噪函数
 def denoise(data):
     # 使用小波变换对信号进行分解
     coeffs = pywt.wavedec(data=data, wavelet='db5', level=9)
@@ -27,17 +82,17 @@ def denoise(data):
     return rdata
 
 
-# 导入数据集
-def load_record(number, X_data, Y_data):
-    ecgClassSet = ['N', 'A', 'V', 'L', 'R']
+# 读取ECG数据和标签
+def get_data_set(number, X_data, Y_data, featSet):
 
     # 加载心电数据并去噪
     print("loading the ecg data of No." + number)
-    record = wfdb.rdrecord('E:/' + name + '/' + number, channel_names=['MLII'])
+    record = wfdb.rdrecord('D:/pycharm/PyCode/ECG/ecg_data/' + number, channel_names=['MLII'])
     data = record.p_signal.flatten()
+    # data = denoise(data)
 
     # 获取R波位置和对应的标签
-    annotation = wfdb.rdann('E:/' + name + '/' + number, 'atr')
+    annotation = wfdb.rdann('D:/pycharm/PyCode/ECG/ecg_data/' + number, 'atr')
     Rlocation = annotation.sample
     Rclass = annotation.symbol
 
@@ -47,107 +102,76 @@ def load_record(number, X_data, Y_data):
     i = start
     j = len(annotation.symbol) - end
 
+    # 选取特殊标签的数据(N/A/V/L/R), 其他舍去
     # X_data: R 波附近的260个数据点
     # Y_data: 将 N/A/V/L/R 映射为 0/1/2/3/4
     while i < j:
         try:
+            # 获得原始数据与标签
             lable = ecgClassSet.index(Rclass[i])
             x_train = data[Rlocation[i] - 80:Rlocation[i] + 180]
+
             X_data.append(x_train)
             Y_data.append(lable)
+
+            feat_sf = np.array(SF(x_train))
+            feat_ar = np.array(ARC(x_train))
+            feat_se = np.array([SE(x_train)])
+            feat_wv = np.array(WV(x_train))
+            feat_hfd = np.array([hfd.hfd(x_train)])
+
+            featSet.append(np.concatenate((feat_sf ,feat_ar, feat_se, feat_wv, feat_hfd), axis=None))
             i += 1
         except ValueError:
             i += 1
     return
 
 
-def handcrafted_feat(data):
-    rows, cols = data.shape
-    fea = np.zeros((rows - 1, 2 * cols))
+# 导入数据，进行预处理
+def load_data():
+    numberSet = ['100']
+    dataSet = []
+    lableSet = []
+    featSet = []
+    for n in numberSet:
+        get_data_set(n, dataSet, lableSet, featSet)
 
-    x = np.arange(rows)
-    regr = linear_model.LinearRegression()
+    # 重排列 & 分割数据集
+    dataSet = np.array(dataSet).reshape(-1, 260)
+    lableSet = np.array(lableSet).reshape(-1)
+    featSet = np.array(featSet)
+    # 在MITDB中, 100的结果为 (2259, 294)
+    print(featSet.shape)
 
-    for i in range(rows - 1):
-        subset_data = data[:(i + 2)]
-
-        # 计算振幅平均特征
-        fea[i, :cols] = np.mean(subset_data, axis=0)
-
-        # 使用线性回归拟合并计算线性模型的趋势系数特征
-        for j in range(cols):
-            regr.fit(x[:(i + 2)].reshape(-1, 1), subset_data[:, j])
-            fea[i, cols + j] = regr.coef_
-
-    return fea
+    return dataSet, lableSet, featSet
 
 
-# #   并行化
-# def calculate_feature(i, j, x, subset_data):
-#     regr = linear_model.LinearRegression()
-#     regr.fit(x.reshape(-1, 1), subset_data[:, j])
-#     return regr.coef_
-#
-#
-# def process_row(i, data, x, cols):
-#     fea_row = np.zeros(2 * cols)
-#
-#     subset_data = data[:(i + 2)]
-#
-#     # 计算振幅平均特征
-#     fea_row[:cols] = np.mean(subset_data, axis=0)
-#
-#     # 并行计算线性模型的趋势系数特征
-#     with ThreadPoolExecutor() as executor:
-#         futures = [
-#             executor.submit(calculate_feature, i, j, x[:(i + 2)], subset_data)
-#             for j in range(cols)
-#         ]
-#
-#         # 获取并行计算的结果
-#         for j, future in enumerate(futures):
-#             fea_row[cols + j] = future.result()
-#
-#     return fea_row
-#
-#
-# def handcrafted_feat(data):
-#     rows, cols = data.shape
-#     fea = np.zeros((rows - 1, 2 * cols))
-#
-#     x = np.arange(rows)
-#
-#     with ThreadPoolExecutor() as executor:
-#         futures = [executor.submit(process_row, i, data, x, cols) for i in range(rows - 1)]
-#
-#         # 获取并行计算的结果
-#         for i, future in enumerate(futures):
-#             fea[i] = future.result()
-#
-#     return fea
+def Plot(data, label):
+    # 准备绘制箱线图的数据
+    boxplot_data = []
+    for i in range(len(ecgClassSet)):
+        class_data = [data[j] for j in range(len(label)) if label[j] == i]
+        boxplot_data.append(class_data)
+
+    # 绘制箱线图
+    plt.figure(figsize=(10, 6))
+    plt.boxplot(boxplot_data, labels=ecgClassSet)
+    plt.xlabel('ECG Class')
+    plt.ylabel('Value')
+    plt.title('Value Boxplot for Each ECG Class')
+    plt.grid(True)
+    plt.show()
+
+
+def main():
+
+    # X_train, y_train 是训练集
+    # X_test, y_test 是测试集
+    # featSet 是特征集合
+    X_train, Y_train, featSet = load_data()
+
+    print(featSet[0])
 
 
 if __name__ == '__main__':
-
-    path = '../benchmarks/'
-    numberSet = ['100']
-    # numberSet = ['100', '101', '103', '105', '106', '107', '108', '109', '111', '112', '113', '114', '115',
-    #              '116', '117', '119', '121', '122', '123', '124', '200', '201', '202', '203', '205', '208',
-    #              '210', '212', '213', '214', '215', '217', '219', '220', '221', '222', '223', '228', '230',
-    #              '231', '232', '233', '234']
-    dataSet = []
-    lableSet = []
-    for n in numberSet:
-        load_record(n, dataSet, lableSet)
-    dataSet = np.array(dataSet).reshape(-1, 260)
-    lableSet = np.array(lableSet).reshape(-1, 1)
-    recordSet = np.hstack((dataSet, lableSet))
-    df = pd.DataFrame(data=recordSet)
-    # 提取手工特征
-    time1 = datetime.now()
-    print("handcrafting...")
-    dataSet_H = handcrafted_feat(dataSet)
-    time2 = datetime.now()
-    print((time2 - time1).seconds)
-    df.to_csv(path + name + ".csv", index=False)
-    np.save(path + name + ".npy", dataSet_H)
+    main()

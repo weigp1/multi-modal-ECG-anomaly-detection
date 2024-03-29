@@ -20,7 +20,7 @@ def train_test_split(X, HFF, y, test_ratio=0.2, seed=None):
 
 
 def load_data(name):
-    path = 'D:/myproject/multi-modal-ECG-anomaly-detection/benchmarks/' + name
+    path = './benchmarks/' + name
     HFF = np.load(path + '.npy')
 
     df = pd.read_csv(path + '.csv').dropna().drop_duplicates()
