@@ -11,7 +11,8 @@ import ctypes
 import numpy as np
 from numpy.ctypeslib import ndpointer
 
-def curve_length(X,opt=True,num_k=50,k_max=None):
+
+def curve_length(X, opt=True, num_k=50, k_max=None):
     """
     Calculate curve length <Lk> for Higuchi Fractal Dimension (HFD)
     
@@ -34,37 +35,38 @@ def curve_length(X,opt=True,num_k=50,k_max=None):
     N = X.size
 
     ### Get interval "time"
-    k_arr = interval_t(N,num_val=num_k,kmax=k_max)
+    k_arr = interval_t(N, num_val=num_k, kmax=k_max)
 
     ### The average length
     Lk = np.zeros(k_arr.size)
 
     ### Native Python run
-    for i in range(k_arr.size):# over array of k's
+    for i in range(k_arr.size):  # over array of k's
         Lmk = 0.0
-        for j in range(k_arr[i]):# over m's
+        for j in range(k_arr[i]):  # over m's
             ## Construct X_k^m, i.e. X_(k_arr[i])^j, as X[j::k_arr[i]]
             ## Calculate L_m(k)
             Lmk += (
-                np.sum(
-                    np.abs(
-                        np.diff( X[j::k_arr[i]] )
-                    )
-                )
-                * (N - 1) /
-                (
-                    ( (N-j-1)//k_arr[i] )
-                    *
-                    k_arr[i]
-                )
-            ) / k_arr[i]
+                           np.sum(
+                               np.abs(
+                                   np.diff(X[j::k_arr[i]])
+                               )
+                           )
+                           * (N - 1) /
+                           (
+                                   ((N - j - 1) // k_arr[i])
+                                   *
+                                   k_arr[i]
+                           )
+                   ) / k_arr[i]
 
         ### Calculate the average Lmk
         Lk[i] = Lmk / k_arr[i]
 
     return (k_arr, Lk)
 
-def lin_fit_hfd(k,L,log=True):
+
+def lin_fit_hfd(k, L, log=True):
     """
     Calculate Higuchi Fractal Dimension (HFD) by fitting a line to already computed
     interval times k and curve lengths L
@@ -81,11 +83,12 @@ def lin_fit_hfd(k,L,log=True):
     HFD
     """
     if log:
-        return (-np.polyfit(np.log2(k),np.log2(L),deg=1)[0])
+        return (-np.polyfit(np.log2(k), np.log2(L), deg=1)[0])
     else:
-        return (-np.polyfit(k,L,deg=1)[0])
+        return (-np.polyfit(k, L, deg=1)[0])
 
-def HFD(X,**kwargs):
+
+def HFD(X, **kwargs):
     """
     Calculate Higuchi Fractal Dimension (HFD) for 1D data/series
 
@@ -97,19 +100,19 @@ def HFD(X,**kwargs):
     
     HFD
     """
-    k, L = curve_length(X,**kwargs)
+    k, L = curve_length(X, **kwargs)
     return lin_fit_hfd(k, L)
 
-def interval_t(size,num_val=50,kmax=None):
+
+def interval_t(size, num_val=50, kmax=None):
     ### Generate sequence of interval times, k
     if kmax is None:
-        k_stop = size//2
+        k_stop = size // 2
     else:
         k_stop = kmax
-    if k_stop > size//2:## prohibit going larger than N/2
-        k_stop = size//2
+    if k_stop > size // 2:  ## prohibit going larger than N/2
+        k_stop = size // 2
         print("Warning: k cannot be longer than N/2")
-        
-    k = np.logspace(start=np.log2(2),stop=np.log2(k_stop),base=2,num=num_val,dtype=int)
-    return np.unique(k)
 
+    k = np.logspace(start=np.log2(2), stop=np.log2(k_stop), base=2, num=num_val, dtype=int)
+    return np.unique(k)

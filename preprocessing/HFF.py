@@ -7,13 +7,13 @@ from hfd import HFD
 from matplotlib import pyplot as plt
 from spectrum import arburg
 
-
 # 测试集比例
 RATIO = 0.3
 # 随机种子
 RANDOM_SEED = 42
 # 数据标签
 ecgClassSet = ['N', 'A', 'V', 'L', 'R']
+
 
 # 香农小波熵
 def SE(data):
@@ -32,6 +32,7 @@ def SE(data):
 
     return entropy
 
+
 # 小波方差
 def WV(data):
     # 小波分解
@@ -40,7 +41,7 @@ def WV(data):
     # 计算小波方差
     wavelet_var = []
     for coeff in coeffs:
-        variances = [(w**2).mean() for w in coeff]
+        variances = [(w ** 2).mean() for w in coeff]
         wavelet_var.extend(variances)
 
     return wavelet_var
@@ -61,7 +62,7 @@ def SF(data):
     Std = np.std(data)
     Med = np.median(data)
     Kurt = kurtosis(data)
-    Skew =  skew(data)
+    Skew = skew(data)
     return np.array([Mean, Std, Med, Kurt, Skew])
 
 
@@ -85,7 +86,6 @@ def denoise(data):
 
 # 读取ECG数据和标签
 def get_data_set(number, X_data, Y_data, featSet):
-
     # 加载心电数据并去噪
     print("loading the ecg data of No." + number)
     record = wfdb.rdrecord('D:/pycharm/PyCode/ECG/ecg_data/' + number, channel_names=['MLII'])
@@ -121,7 +121,7 @@ def get_data_set(number, X_data, Y_data, featSet):
             feat_wv = np.array(WV(x_train))
             feat_hfd = np.array([HFD(x_train)])
 
-            featSet.append(np.concatenate((feat_sf ,feat_ar, feat_se, feat_wv, feat_hfd), axis=None))
+            featSet.append(np.concatenate((feat_sf, feat_ar, feat_se, feat_wv, feat_hfd), axis=None))
             i += 1
         except ValueError:
             i += 1
@@ -165,7 +165,6 @@ def Plot(data, label):
 
 
 def main():
-
     # X_train, y_train 是训练集
     # X_test, y_test 是测试集
     # featSet 是特征集合
