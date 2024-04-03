@@ -88,12 +88,12 @@ def denoise(data):
 def get_data_set(number, X_data, Y_data, featSet):
     # 加载心电数据并去噪
     print("loading the ecg data of No." + number)
-    record = wfdb.rdrecord('D:/pycharm/PyCode/ECG/ecg_data/' + number, channel_names=['MLII'])
+    record = wfdb.rdrecord('D:/myproject/ECG_Benchmark/data/test/' + number, channel_names=['MLII'])
     data = record.p_signal.flatten()
-    # data = denoise(data)
+    data = denoise(data)
 
     # 获取R波位置和对应的标签
-    annotation = wfdb.rdann('D:/pycharm/PyCode/ECG/ecg_data/' + number, 'atr')
+    annotation = wfdb.rdann('D:/myproject/ECG_Benchmark/data/test/' + number, 'atr')
     Rlocation = annotation.sample
     Rclass = annotation.symbol
 
@@ -140,11 +140,19 @@ def load_data():
     # 重排列 & 分割数据集
     dataSet = np.array(dataSet).reshape(-1, 260)
     lableSet = np.array(lableSet).reshape(-1)
-    featSet = np.array(featSet)
-    # 在MITDB中, 100的结果为 (2259, 294)
-    print(featSet.shape)
 
-    return dataSet, lableSet, featSet
+    # SVD奇异值分解
+    featSet = np.array(featSet)
+    U, S, V = np.linalg.svd(featSet)
+    k = 2  # 选择前2个奇异值作为主要特征
+    U_k = U[:, :k]
+    S_k = np.diag(S[:k])
+    V_k = V[:k, :]
+    featSet_approx = np.dot(U_k, np.dot(S_k, V_k))
+
+    print(featSet_approx.shape)
+
+    return dataSet, lableSet, featSet_approx
 
 
 def Plot(data, label):
@@ -169,8 +177,6 @@ def main():
     # X_test, y_test 是测试集
     # featSet 是特征集合
     X_train, Y_train, featSet = load_data()
-
-    print(featSet[0])
 
 
 if __name__ == '__main__':
