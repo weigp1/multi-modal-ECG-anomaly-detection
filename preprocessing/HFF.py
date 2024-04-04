@@ -4,8 +4,9 @@ import numpy as np
 from scipy.stats import kurtosis, skew
 
 from hfd import HFD
-from matplotlib import pyplot as plt
 from spectrum import arburg
+import statsmodels.api as sm
+from matplotlib import pyplot as plt
 
 
 # 测试集比例
@@ -48,10 +49,11 @@ def WV(data):
 
 # AR系数
 def ARC(data, order=32):
-    # 计算自回归（AR）系数
-    coefficients, _, _ = arburg(data, order)
-    coefficients = coefficients.real.astype(float)
-    return coefficients
+    # 拟合 AR 模型
+    model = sm.tsa.AutoReg(data, lags=order)
+    ar_model = model.fit()
+    # 返回 AR 系数
+    return ar_model.params
 
 
 # 静态特征
