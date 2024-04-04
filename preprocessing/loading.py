@@ -26,9 +26,6 @@ def load_data(name):
     df = pd.read_csv(path + '.csv').dropna().drop_duplicates()
     raw_data = np.array(df.iloc[:, :-1])
     labels = np.array(df.iloc[:, -1])
-    # 剔除原序列最后一条数据, 保证双流数据条数一致
-    raw_data = raw_data[:-1]
-    labels = labels[:-1]
 
     X_train, X_test, X_train_H, X_test_H, y_train, y_test = train_test_split(raw_data, HFF, labels, RATIO, RANDOM_SEED)
 

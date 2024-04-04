@@ -4,6 +4,7 @@ import numpy as np
 from scipy.stats import kurtosis, skew
 
 from hfd import HFD
+from matplotlib import pyplot as plt
 from spectrum import arburg
 import statsmodels.api as sm
 from matplotlib import pyplot as plt
@@ -32,6 +33,7 @@ def SE(data):
         entropy -= np.sum(probability * np.log2(probability + 1e-10))
 
     return entropy
+
 
 # 小波方差
 def WV(data):
@@ -63,7 +65,7 @@ def SF(data):
     Std = np.std(data)
     Med = np.median(data)
     Kurt = kurtosis(data)
-    Skew =  skew(data)
+    Skew = skew(data)
     return np.array([Mean, Std, Med, Kurt, Skew])
 
 
@@ -87,15 +89,14 @@ def denoise(data):
 
 # 读取ECG数据和标签
 def get_data_set(number, X_data, Y_data, featSet):
-
     # 加载心电数据并去噪
     print("loading the ecg data of No." + number)
-    record = wfdb.rdrecord('D:/pycharm/PyCode/ECG/ecg_data/' + number, channel_names=['MLII'])
+    record = wfdb.rdrecord('D:/myproject/ECG_Benchmark/data/test/' + number, channel_names=['MLII'])
     data = record.p_signal.flatten()
-    # data = denoise(data)
+    data = denoise(data)
 
     # 获取R波位置和对应的标签
-    annotation = wfdb.rdann('D:/pycharm/PyCode/ECG/ecg_data/' + number, 'atr')
+    annotation = wfdb.rdann('D:/myproject/ECG_Benchmark/data/test/' + number, 'atr')
     Rlocation = annotation.sample
     Rclass = annotation.symbol
 
@@ -123,11 +124,38 @@ def get_data_set(number, X_data, Y_data, featSet):
             feat_wv = np.array(WV(x_train))
             feat_hfd = np.array([HFD(x_train)])
 
-            featSet.append(np.concatenate((feat_sf ,feat_ar, feat_se, feat_wv, feat_hfd), axis=None))
+            featSet.append(np.concatenate((feat_sf, feat_ar, feat_se, feat_wv, feat_hfd), axis=None))
             i += 1
         except ValueError:
             i += 1
     return
+
+
+def pca_with_svd(data, variance_ratio_threshold):
+    standardized_data = data
+
+    # 使用SVD计算主成分
+    U, S, Vt = np.linalg.svd(standardized_data, full_matrices=False)
+
+    # 计算总方差
+    total_variance = np.sum(S ** 2)
+
+    # 计算累积方差比例
+    variance_ratios = (S ** 2) / total_variance
+    cumulative_variance_ratios = np.cumsum(variance_ratios)
+
+    # 确定主成分数量
+    num_components = np.argmax(cumulative_variance_ratios >= variance_ratio_threshold) + 1
+    print(num_components)
+    # 选择主成分
+    # U_reduced = U[:, :num_components]
+    # S_reduced = np.diag(S[:num_components])
+    Vt_reduced = Vt[:num_components, :]
+
+    # 计算主成分得分
+    scores = np.dot(standardized_data, Vt_reduced.T)
+
+    return scores
 
 
 # 导入数据，进行预处理
@@ -142,11 +170,14 @@ def load_data():
     # 重排列 & 分割数据集
     dataSet = np.array(dataSet).reshape(-1, 260)
     lableSet = np.array(lableSet).reshape(-1)
-    featSet = np.array(featSet)
-    # 在MITDB中, 100的结果为 (2259, 294)
-    print(featSet.shape)
 
-    return dataSet, lableSet, featSet
+    # SVD奇异值分解
+    featSet = np.array(featSet)
+    scores = pca_with_svd(featSet, 0.9)
+
+    print(scores.shape)
+
+    return dataSet, lableSet, scores
 
 
 def Plot(data, label):
@@ -167,13 +198,10 @@ def Plot(data, label):
 
 
 def main():
-
     # X_train, y_train 是训练集
     # X_test, y_test 是测试集
     # featSet 是特征集合
     X_train, Y_train, featSet = load_data()
-
-    print(featSet[0])
 
 
 if __name__ == '__main__':
