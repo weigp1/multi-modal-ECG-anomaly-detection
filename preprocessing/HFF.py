@@ -2,7 +2,6 @@ import wfdb
 import pywt
 import numpy as np
 from scipy.stats import kurtosis, skew
-
 from hfd import HFD
 from matplotlib import pyplot as plt
 from spectrum import arburg
@@ -13,6 +12,24 @@ RATIO = 0.3
 RANDOM_SEED = 42
 # 数据标签
 ecgClassSet = ['N', 'A', 'V', 'L', 'R']
+
+
+# 实现小波去噪函数
+def denoise(data):
+    # 使用小波变换对信号进行分解
+    coeffs = pywt.wavedec(data=data, wavelet='db5', level=9)
+    cA9, cD9, cD8, cD7, cD6, cD5, cD4, cD3, cD2, cD1 = coeffs
+
+    # 使用软阈值对分解后的系数进行去噪
+    threshold = (np.median(np.abs(cD1)) / 0.6745) * (np.sqrt(2 * np.log(len(cD1))))
+    cD1.fill(0)
+    cD2.fill(0)
+    for i in range(1, len(coeffs) - 2):
+        coeffs[i] = pywt.threshold(coeffs[i], threshold)
+
+    # 通过逆小波变换得到去噪后的信号
+    rdata = pywt.waverec(coeffs=coeffs, wavelet='db5')
+    return rdata
 
 
 # 香农小波熵
@@ -48,7 +65,7 @@ def WV(data):
 
 
 # AR系数
-def ARC(data, order=32):
+def ARC(data, order=19):
     # 计算自回归（AR）系数
     coefficients, _, _ = arburg(data, order)
     coefficients = coefficients.real.astype(float)
@@ -64,24 +81,6 @@ def SF(data):
     Kurt = kurtosis(data)
     Skew = skew(data)
     return np.array([Mean, Std, Med, Kurt, Skew])
-
-
-# 实现小波去噪函数
-def denoise(data):
-    # 使用小波变换对信号进行分解
-    coeffs = pywt.wavedec(data=data, wavelet='db5', level=9)
-    cA9, cD9, cD8, cD7, cD6, cD5, cD4, cD3, cD2, cD1 = coeffs
-
-    # 使用软阈值对分解后的系数进行去噪
-    threshold = (np.median(np.abs(cD1)) / 0.6745) * (np.sqrt(2 * np.log(len(cD1))))
-    cD1.fill(0)
-    cD2.fill(0)
-    for i in range(1, len(coeffs) - 2):
-        coeffs[i] = pywt.threshold(coeffs[i], threshold)
-
-    # 通过逆小波变换得到去噪后的信号
-    rdata = pywt.waverec(coeffs=coeffs, wavelet='db5')
-    return rdata
 
 
 # 读取ECG数据和标签
@@ -103,9 +102,6 @@ def get_data_set(number, X_data, Y_data, featSet):
     i = start
     j = len(annotation.symbol) - end
 
-    # 选取特殊标签的数据(N/A/V/L/R), 其他舍去
-    # X_data: R 波附近的260个数据点
-    # Y_data: 将 N/A/V/L/R 映射为 0/1/2/3/4
     while i < j:
         try:
             # 获得原始数据与标签
@@ -128,6 +124,33 @@ def get_data_set(number, X_data, Y_data, featSet):
     return
 
 
+def pca_with_svd(data, variance_ratio_threshold):
+    standardized_data = data
+
+    # 使用SVD计算主成分
+    U, S, Vt = np.linalg.svd(standardized_data, full_matrices=False)
+
+    # 计算总方差
+    total_variance = np.sum(S ** 2)
+
+    # 计算累积方差比例
+    variance_ratios = (S ** 2) / total_variance
+    cumulative_variance_ratios = np.cumsum(variance_ratios)
+
+    # 确定主成分数量
+    num_components = np.argmax(cumulative_variance_ratios >= variance_ratio_threshold) + 1
+    print(num_components)
+    # 选择主成分
+    # U_reduced = U[:, :num_components]
+    # S_reduced = np.diag(S[:num_components])
+    Vt_reduced = Vt[:num_components, :]
+
+    # 计算主成分得分
+    scores = np.dot(standardized_data, Vt_reduced.T)
+
+    return scores
+
+
 # 导入数据，进行预处理
 def load_data():
     numberSet = ['100']
@@ -143,16 +166,11 @@ def load_data():
 
     # SVD奇异值分解
     featSet = np.array(featSet)
-    U, S, V = np.linalg.svd(featSet)
-    k = 2  # 选择前2个奇异值作为主要特征
-    U_k = U[:, :k]
-    S_k = np.diag(S[:k])
-    V_k = V[:k, :]
-    featSet_approx = np.dot(U_k, np.dot(S_k, V_k))
+    scores = pca_with_svd(featSet, 0.9)
 
-    print(featSet_approx.shape)
+    print(scores.shape)
 
-    return dataSet, lableSet, featSet_approx
+    return dataSet, lableSet, scores
 
 
 def Plot(data, label):
