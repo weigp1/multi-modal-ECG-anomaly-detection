@@ -34,4 +34,5 @@ def load_data(name):
     X_test_raw = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
     X_train_hff = X_train_H.reshape(X_train_H.shape[0], X_train_H.shape[1], 1)
     X_test_hff = X_test_H.reshape(X_test_H.shape[0], X_test_H.shape[1], 1)
+
     return X_train_raw, X_test_raw, X_train_hff, X_test_hff, y_train, y_test
