@@ -1,13 +1,14 @@
+import os
+
 import wfdb
 import pywt
 import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+from matplotlib import pyplot as plt
 from scipy.stats import kurtosis, skew
 
 from hfd import HFD
-from matplotlib import pyplot as plt
-from spectrum import arburg
-import statsmodels.api as sm
-from matplotlib import pyplot as plt
 
 
 # 测试集比例
@@ -16,6 +17,7 @@ RATIO = 0.3
 RANDOM_SEED = 42
 # 数据标签
 ecgClassSet = ['N', 'A', 'V', 'L', 'R']
+
 
 # 香农小波熵
 def SE(data):
@@ -43,14 +45,14 @@ def WV(data):
     # 计算小波方差
     wavelet_var = []
     for coeff in coeffs:
-        variances = [(w**2).mean() for w in coeff]
+        variances = [(w ** 2).mean() for w in coeff]
         wavelet_var.extend(variances)
 
     return wavelet_var
 
 
 # AR系数
-def ARC(data, order=32):
+def ARC(data, order=19):
     # 拟合 AR 模型
     model = sm.tsa.AutoReg(data, lags=order)
     ar_model = model.fit()
@@ -87,97 +89,124 @@ def denoise(data):
     return rdata
 
 
-# 读取ECG数据和标签
-def get_data_set(number, X_data, Y_data, featSet):
-    # 加载心电数据并去噪
-    print("loading the ecg data of No." + number)
-    record = wfdb.rdrecord('D:/myproject/ECG_Benchmark/data/test/' + number, channel_names=['MLII'])
-    data = record.p_signal.flatten()
-    data = denoise(data)
-
-    # 获取R波位置和对应的标签
-    annotation = wfdb.rdann('D:/myproject/ECG_Benchmark/data/test/' + number, 'atr')
-    Rlocation = annotation.sample
-    Rclass = annotation.symbol
-
-    # 去除首尾不稳定信号
-    start = 10
-    end = 5
-    i = start
-    j = len(annotation.symbol) - end
-
-    # 选取特殊标签的数据(N/A/V/L/R), 其他舍去
-    # X_data: R 波附近的260个数据点
-    # Y_data: 将 N/A/V/L/R 映射为 0/1/2/3/4
-    while i < j:
-        try:
-            # 获得原始数据与标签
-            lable = ecgClassSet.index(Rclass[i])
-            x_train = data[Rlocation[i] - 80:Rlocation[i] + 180]
-
-            X_data.append(x_train)
-            Y_data.append(lable)
-
-            feat_sf = np.array(SF(x_train))
-            feat_ar = np.array(ARC(x_train))
-            feat_se = np.array([SE(x_train)])
-            feat_wv = np.array(WV(x_train))
-            feat_hfd = np.array([HFD(x_train)])
-
-            featSet.append(np.concatenate((feat_sf, feat_ar, feat_se, feat_wv, feat_hfd), axis=None))
-            i += 1
-        except ValueError:
-            i += 1
-    return
-
-
-def pca_with_svd(data, variance_ratio_threshold):
+#
+def pca_with_svd(data, num_components):
     standardized_data = data
 
     # 使用SVD计算主成分
     U, S, Vt = np.linalg.svd(standardized_data, full_matrices=False)
 
-    # 计算总方差
-    total_variance = np.sum(S ** 2)
+    # 计算奇异值的平方并归一化
+    normalized_eigenvalues = (S ** 2) / np.sum(S ** 2)
 
-    # 计算累积方差比例
-    variance_ratios = (S ** 2) / total_variance
-    cumulative_variance_ratios = np.cumsum(variance_ratios)
+    # 计算保留的信息占比
+    retained_variance_ratio = np.sum(normalized_eigenvalues[:num_components])
+    print(retained_variance_ratio)
 
-    # 确定主成分数量
-    num_components = np.argmax(cumulative_variance_ratios >= variance_ratio_threshold) + 1
-    print(num_components)
     # 选择主成分
-    # U_reduced = U[:, :num_components]
-    # S_reduced = np.diag(S[:num_components])
     Vt_reduced = Vt[:num_components, :]
 
     # 计算主成分得分
     scores = np.dot(standardized_data, Vt_reduced.T)
 
+    # 肘部法则
+    # silhouette_scores = []
+    # for num_components in range(10, 31):
+    #     # 使用SVD计算主成分
+    #     U, S, Vt = np.linalg.svd(data, full_matrices=False)
+    #     # 选择主成分
+    #     Vt_reduced = Vt[:num_components, :]
+    #     # 计算主成分得分
+    #     scores = np.dot(data, Vt_reduced.T)
+    #     kmeans = KMeans(n_clusters=5, random_state=42)
+    #     labels = kmeans.fit_predict(scores)
+    #     silhouette_scores.append(silhouette_score(scores, labels))
+    #
+    # # 绘制肘部法则图
+    # plt.plot(range(10, 31), silhouette_scores, marker='o')
+    # plt.xlabel('Number of Dimensions')
+    # plt.ylabel('Silhouette Score')
+    # plt.title('Elbow Method for Dimensionality Reduction')
+    # plt.show()
+
     return scores
+
+
+origin_path = 'D:/pycharm/PyCode/multi-modal-ECG-anomaly-detection/data/'
+dataSets = ['mitdb']
+frequency = [360]
 
 
 # 导入数据，进行预处理
 def load_data():
-    numberSet = ['100']
-    dataSet = []
-    lableSet = []
-    featSet = []
-    for n in numberSet:
-        get_data_set(n, dataSet, lableSet, featSet)
+    for index in range(len(dataSets)):
+        dataSet = []
+        featSet = []
+        labelSet = []
+        print(dataSets[index])
+        f = frequency[index]
+        file_names_set = set()
 
-    # 重排列 & 分割数据集
-    dataSet = np.array(dataSet).reshape(-1, 260)
-    lableSet = np.array(lableSet).reshape(-1)
+        try:
+            for file in os.listdir(origin_path + dataSets[index] + '/'):
+                name = os.path.splitext(file)[0]
 
-    # SVD奇异值分解
-    featSet = np.array(featSet)
-    scores = pca_with_svd(featSet, 0.9)
+                # 防止重复读取
+                if name in file_names_set:
+                    continue
+                file_names_set.add(name)
 
-    print(scores.shape)
+                try:
+                    annotation = wfdb.rdann(origin_path + dataSets[index] + '/' + name, 'atr')
+                    samples = annotation.sample
+                    symbol = annotation.symbol
 
-    return dataSet, lableSet, scores
+                    rdata = wfdb.rdrecord(origin_path + dataSets[index] + '/' + name, channels=[0]).p_signal
+                    rdata = rdata.flatten()
+                    data = denoise(rdata)
+                    i = 0
+                    j = len(symbol) - 1
+
+                    while i < j:
+                        i += 1
+                        if samples[i] - f/2 <= 0:
+                            continue
+                        elif samples[i] + f/2 > len(data):
+                            break
+                        # 加入数据和标签
+                        x_data = data[int(samples[i] - f/2):int(samples[i] + f/2)]
+                        dataSet.append(x_data)
+                        labelSet.append(ecgClassSet.index(symbol[i]))
+
+                        feat_sf = np.array(SF(x_data))
+                        feat_ar = np.array(ARC(x_data))
+                        feat_se = np.array(SE(x_data))
+                        feat_wv = np.array(WV(x_data))
+                        feat_hfd = np.array(HFD(x_data))
+
+                        featSet.append(np.concatenate((feat_sf, feat_ar, feat_se, feat_wv, feat_hfd), axis=None))
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
+        # 重排列 & 分割数据集
+        df = pd.DataFrame(dataSet)
+        df.to_csv('../benchmark/dataSet_' + dataSets[index] + '.csv', index=False)
+
+        df = pd.DataFrame(labelSet)
+        df.to_csv('../benchmark/labelSet_' + dataSets[index] + '.csv', index=False)
+
+        featSet = np.array(featSet)
+        df = pd.DataFrame(featSet)
+        df.to_csv('../benchmark/featSet_' + dataSets[index] + '.csv', index=False)
+
+        # SVD奇异值分解
+        # print('Before SVD: ', featSet.shape)
+        # scores = pca_with_svd(featSet, 15)
+        # print('After SVD: ', scores.shape)
+        # df = pd.DataFrame(scores)
+
 
 
 def Plot(data, label):
@@ -197,12 +226,5 @@ def Plot(data, label):
     plt.show()
 
 
-def main():
-    # X_train, y_train 是训练集
-    # X_test, y_test 是测试集
-    # featSet 是特征集合
-    X_train, Y_train, featSet = load_data()
-
-
 if __name__ == '__main__':
-    main()
+    load_data()
