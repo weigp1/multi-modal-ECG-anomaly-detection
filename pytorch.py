@@ -16,19 +16,29 @@ class BiLSTMModel(pl.LightningModule):
         super(BiLSTMModel, self).__init__()
 
         # 原始流模型
-        self.raw_lstm = nn.LSTM(input_size=X_shape[0], hidden_size=256, bidirectional=False)
+        self.raw_lstm = nn.LSTM(input_size=X_shape[0],
+                                hidden_size=256,
+                                bidirectional=False,
+                                batch_first=True)
+
         self.raw_fc = nn.Sequential(
             nn.Linear(256, 64),
             nn.ReLU(),
-            nn.Linear(64, 5)
+            nn.Linear(64, 5),
+            nn.Dropout(p=0.2)
         )
 
         # 特征流模型
-        self.feat_lstm = nn.LSTM(input_size=HFF_shape[0], hidden_size=256, bidirectional=False)
+        self.feat_lstm = nn.LSTM(input_size=HFF_shape[0],
+                                 hidden_size=256,
+                                 bidirectional=False,
+                                 batch_first=True)
+
         self.feat_fc = nn.Sequential(
             nn.Linear(256, 64),
             nn.ReLU(),
-            nn.Linear(64, 5)
+            nn.Linear(64, 5),
+            nn.Dropout(p=0.2)
         )
 
         # 合并两个流的输出
@@ -50,7 +60,6 @@ class BiLSTMModel(pl.LightningModule):
 
         return combined_out
 
-    # 定义训练步骤
     def training_step(self, batch, batch_idx):
         # 从批次中获取训练数据
         X_train, X_train_H, y_train = batch
@@ -64,7 +73,6 @@ class BiLSTMModel(pl.LightningModule):
         # 返回损失
         return loss
 
-    # 定义验证步骤
     def validation_step(self, batch, batch_idx):
         # 从批次中获取验证数据
         X_val, X_val_H, y_val = batch
@@ -88,7 +96,6 @@ class BiLSTMModel(pl.LightningModule):
         # 返回损失
         return loss
 
-    # 定义测试步骤
     def test_step(self, batch, batch_idx):
         # 从批次中获取测试数据
         X_test, X_test_H, y_test = batch
