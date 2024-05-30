@@ -132,7 +132,7 @@ def pca_with_svd(data, num_components):
     return scores
 
 
-origin_path = 'D:/pycharm/PyCode/multi-modal-ECG-anomaly-detection/data/'
+origin_path = 'D:\\pycharm\\PyCode\\ECG\\ecg_data\\'
 dataSets = ['mitdb']
 frequency = [360]
 
