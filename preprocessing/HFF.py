@@ -1,23 +1,27 @@
 import os
-
-import pandas as pd
 import wfdb
 import pywt
 import numpy as np
-from scipy.stats import kurtosis, skew
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
-
-from hfd import HFD
+import pandas as pd
 import statsmodels.api as sm
 from matplotlib import pyplot as plt
+from scipy.stats import kurtosis, skew as skews
+from scipy import signal
 
-# 测试集比例
-RATIO = 0.3
+from hfd import HFD
+
 # 随机种子
 RANDOM_SEED = 42
 # 数据标签
 ecgClassSet = ['N', 'A', 'V', 'L', 'R']
+
+# 1 表示使用原始数据导入，2表示使用csv数据导入
+load_type = 1
+
+# 原始数据导入参数
+raw_path = 'E:\\'
+dataSets = ['mitdb']
+frequency = [360]
 
 
 # 香农小波熵
@@ -49,7 +53,7 @@ def WV(data):
         variances = [(w ** 2).mean() for w in coeff]
         wavelet_var.extend(variances)
 
-    return wavelet_var
+    return coeffs[-1], wavelet_var
 
 
 # AR系数
@@ -110,85 +114,142 @@ def pca_with_svd(data, num_components):
     # 计算主成分得分
     scores = np.dot(standardized_data, Vt_reduced.T)
 
-    # 肘部法则
-    # silhouette_scores = []
-    # for num_components in range(10, 31):
-    #     # 使用SVD计算主成分
-    #     U, S, Vt = np.linalg.svd(data, full_matrices=False)
-    #     # 选择主成分
-    #     Vt_reduced = Vt[:num_components, :]
-    #     # 计算主成分得分
-    #     scores = np.dot(data, Vt_reduced.T)
-    #     kmeans = KMeans(n_clusters=5, random_state=42)
-    #     labels = kmeans.fit_predict(scores)
-    #     silhouette_scores.append(silhouette_score(scores, labels))
-    #
-    # # 绘制肘部法则图
-    # plt.plot(range(10, 31), silhouette_scores, marker='o')
-    # plt.xlabel('Number of Dimensions')
-    # plt.ylabel('Silhouette Score')
-    # plt.title('Elbow Method for Dimensionality Reduction')
-    # plt.show()
-
     return scores
 
 
-origin_path = 'D:/myproject/ECG_Benchmark/data/'
-filtered_path = '../data/'
-dataSets = ['mitdb']
-frequency = [360]
-
-
 # 导入数据，进行预处理
-def load_data():
+def load_data_raw():
+    print("load data by raw now")
     for index in range(len(dataSets)):
         dataSet = []
         featSet = []
+        labelSet = []
+        corpus = []
         print(dataSets[index])
         f = frequency[index]
-        try:
-            for file in os.listdir(filtered_path + dataSets[index] + '/'):
-                name = os.path.splitext(file)[0]
-                try:
-                    annotation = wfdb.rdann(origin_path + dataSets[index] + '/' + name, 'atr')
-                    samples = annotation.sample
-                    rdata = wfdb.rdrecord(origin_path + dataSets[index] + '/' + name, channels=[0]).p_signal
-                    rdata = rdata.flatten()
-                    data = denoise(rdata)
-                    i = 0
-                    j = len(annotation.symbol) - 1
+        file_names_set = set()
 
-                    while i < j:
-                        i += 1
-                        if samples[i] - f/2 <= 0:
-                            continue
-                        elif samples[i] + f/2 > len(data):
-                            break
-                        x_data = data[int(samples[i] - f/2):int(samples[i] + f/2)]
-                        dataSet.append(x_data)
+        for file in os.listdir(raw_path + dataSets[index] + '/'):
+            name = os.path.splitext(file)[0]
 
-                        feat_sf = np.array(SF(x_data))
-                        feat_ar = np.array(ARC(x_data))
-                        feat_se = np.array(SE(x_data))
-                        feat_wv = np.array(WV(x_data))
-                        feat_hfd = np.array(HFD(x_data))
-                        featSet.append(np.concatenate((feat_sf, feat_ar, feat_se, feat_wv, feat_hfd), axis=None))
-                except Exception:
-                    continue
-        except Exception:
-            continue
+            # 防止重复读取
+            if name in file_names_set:
+                continue
+            file_names_set.add(name)
+
+            try:
+                annotation = wfdb.rdann(raw_path + dataSets[index] + '/' + name, 'atr')
+                samples = annotation.sample
+                symbol = annotation.symbol
+
+                rdata = wfdb.rdrecord(raw_path + dataSets[index] + '/' + name, channels=[0]).p_signal
+                rdata = rdata.flatten()
+                data = denoise(rdata)
+
+                prev_sample = samples[0]
+                i = 1
+                j = len(symbol) - 1
+
+                while i < j:
+                    i += 1
+                    if samples[i] - f / 2 <= 0:
+                        continue
+                    elif samples[i] + f / 2 > len(data):
+                        break
+                    if symbol[i] not in ecgClassSet:
+                        continue
+                    # 加入数据和标签
+                    x_data = data[int(samples[i] - f / 2):int(samples[i] + f / 2)]
+                    x_data = signal.resample(x_data, 250)
+
+                    labelSet.append(ecgClassSet.index(symbol[i]))
+
+                    dataSet.append(x_data)
+
+                    feat_sf = np.array(SF(x_data))
+                    feat_ar = np.array(ARC(x_data))
+                    feat_se = np.array(SE(x_data))
+                    wave, wv = WV(x_data)
+                    feat_wv = np.array(wv)
+                    feat_wav = np.array(wave)
+                    feat_hfd = np.array(HFD(x_data))
+                    featSet.append(np.concatenate((feat_sf, feat_ar, feat_se, feat_wv, feat_hfd, feat_wav), axis=None))
+
+                    RR_interval = samples[i] - prev_sample
+                    prev_sample = samples[i]
+                    Kurt = np.around(np.array(kurtosis(x_data)), decimals=2)
+                    Skew = np.around(np.array(skews(x_data)), decimals=2)
+
+                    p_wave_index = np.argmax(x_data[0:125 - 5])
+                    q_wave_index = 125 - 25 + np.argmin(x_data[100:125])
+                    s_wave_index = 125 + np.argmin(x_data[125:150])
+                    t_wave_index = 125 + 5 + np.argmax(x_data[125 + 5:250])
+
+                    description = ['low', 'medium low', 'medium', 'medium high', 'high']
+
+                    if Kurt <= 0:
+                        kurt = description[0]
+                    elif 0 < Kurt <= 10:
+                        kurt = description[1]
+                    elif 10 < Kurt <= 20:
+                        kurt = description[2]
+                    elif 20 < Kurt <= 30:
+                        kurt = description[3]
+                    else:
+                        kurt = description[4]
+
+                    if Skew <= -1:
+                        skew = description[0]
+                    elif -1 < Skew <= 1:
+                        skew = description[1]
+                    elif 1 < Skew <= 3:
+                        skew = description[2]
+                    elif 3 < Skew <= 5:
+                        skew = description[3]
+                    else:
+                        skew = description[4]
+
+                    if RR_interval <= 150:
+                        rr_interval = description[0]
+                    elif 150 < RR_interval <= 200:
+                        rr_interval = description[1]
+                    elif 200 < RR_interval <= 300:
+                        rr_interval = description[2]
+                    elif 300 < RR_interval <= 350:
+                        rr_interval = description[3]
+                    else:
+                        rr_interval = description[4]
+
+                    feature_summary = (
+                            "This ECG wave has a " + kurt + " kurtosis, a " + skew + " skewness, a " + rr_interval + " R-peak interval,"
+                                                                                                                     f"with P peak at timestamp {p_wave_index}, "
+                                                                                                                     f"Q peak at timestamp {q_wave_index}, "
+                                                                                                                     f"S peak at timestamp {s_wave_index}, "
+                                                                                                                     f"and T peak at timestamp {t_wave_index}.")
+                    corpus.append(feature_summary)
+            except Exception:
+                continue
+
         # 重排列 & 分割数据集
         df = pd.DataFrame(dataSet)
-
         df.to_csv('../benchmark/dataSet_' + dataSets[index] + '.csv', index=False)
 
-        # SVD奇异值分解
+        df = pd.DataFrame(labelSet)
+        df.to_csv('../benchmark/labelSet_' + dataSets[index] + '.csv', index=False)
+
         featSet = np.array(featSet)
-        print('Before SVD: ', featSet.shape)
-        scores = pca_with_svd(featSet, 15)
-        print('After SVD: ', scores.shape)
-        df = pd.DataFrame(scores)
+        df = pd.DataFrame(featSet)
         df.to_csv('../benchmark/featSet_' + dataSets[index] + '.csv', index=False)
+
+        corpus = np.array(corpus)
+        df = pd.DataFrame(corpus)
+        df.to_csv('../benchmark/corpus_' + dataSets[index] + '.csv', index=False)
+
+        # SVD奇异值分解
+        # print('Before SVD: ', featSet.shape)
+        # scores = pca_with_svd(featSet, 15)
+        # print('After SVD: ', scores.shape)
+        # df = pd.DataFrame(scores)
 
 
 def Plot(data, label):
@@ -209,4 +270,7 @@ def Plot(data, label):
 
 
 if __name__ == '__main__':
-    load_data()
+    if load_type == 1:
+        load_data_raw()
+    else:
+        load_data_csv()

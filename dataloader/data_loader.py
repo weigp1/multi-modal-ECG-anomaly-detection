@@ -34,9 +34,9 @@ class DataIter(data.IterableDataset):
     def _get_data(self, data_root, data_set, test_ratio=0.2, seed=None):
 
         data_x_pt = os.path.join(data_root, 'dataSet_' + data_set + '.csv')
-        data_y_pt = os.path.join(data_root, 'labelSet' + data_set + '.csv')
-        data_hff_pt = os.path.join(data_root, 'featSet' + data_set + '.csv')
-        data_pmpt_pt = os.path.join(data_root, 'featSet' + data_set + '.csv')
+        data_y_pt = os.path.join(data_root, 'labelSet_' + data_set + '.csv')
+        data_hff_pt = os.path.join(data_root, 'featSet_' + data_set + '.csv')
+        data_pmpt_pt = os.path.join(data_root, 'featSet_' + data_set + '.csv')
 
         data_x = pd.read_csv(data_x_pt, sep=" ", header=None)
         data_y = pd.read_csv(data_y_pt, sep=" ", header=None)
