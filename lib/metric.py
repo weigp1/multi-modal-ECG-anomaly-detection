@@ -1,6 +1,5 @@
 """
 Metric function library
-Author: Yunpeng Chen
 * most of the code are inspired by MXNet
 """
 import logging

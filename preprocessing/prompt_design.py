@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from scipy.stats import kurtosis, skew as skews
 from scipy import signal
 
-from hfd import HFD
+from HFD import HFD
 
 # 随机种子
 RANDOM_SEED = 42
@@ -19,7 +19,7 @@ ecgClassSet = ['N', 'A', 'V', 'L', 'R']
 load_type = 1
 
 # 原始数据导入参数
-raw_path = 'E:\\'
+raw_path = 'E:\\ECG_Dataset\\'
 dataSets = ['mitdb']
 frequency = [360]
 
@@ -45,7 +45,7 @@ def SE(data):
 # 小波方差
 def WV(data):
     # 小波分解
-    coeffs = pywt.swt(data, 'db2', level=2, norm=True)
+    coeffs = pywt.swt(data, 'db2', level=1, norm=True)
 
     # 计算小波方差
     wavelet_var = []
@@ -72,7 +72,7 @@ def SF(data):
     Std = np.std(data)
     Med = np.median(data)
     Kurt = kurtosis(data)
-    Skew = skew(data)
+    Skew = skews(data)
     return np.array([Mean, Std, Med, Kurt, Skew])
 
 
@@ -94,7 +94,7 @@ def denoise(data):
     return rdata
 
 
-#
+# PCA 降维
 def pca_with_svd(data, num_components):
     standardized_data = data
 
@@ -126,6 +126,7 @@ def load_data_raw():
         labelSet = []
         corpus = []
         print(dataSets[index])
+
         f = frequency[index]
         file_names_set = set()
 
@@ -137,98 +138,95 @@ def load_data_raw():
                 continue
             file_names_set.add(name)
 
-            try:
-                annotation = wfdb.rdann(raw_path + dataSets[index] + '/' + name, 'atr')
-                samples = annotation.sample
-                symbol = annotation.symbol
+            annotation = wfdb.rdann(raw_path + dataSets[index] + '/' + name, 'atr')
+            samples = annotation.sample
+            symbol = annotation.symbol
 
-                rdata = wfdb.rdrecord(raw_path + dataSets[index] + '/' + name, channels=[0]).p_signal
-                rdata = rdata.flatten()
-                data = denoise(rdata)
+            rdata = wfdb.rdrecord(raw_path + dataSets[index] + '/' + name, channels=[0]).p_signal
+            rdata = rdata.flatten()
+            data = denoise(rdata)
 
-                prev_sample = samples[0]
-                i = 1
-                j = len(symbol) - 1
+            prev_sample = samples[0]
+            i = 1
+            j = len(symbol) - 1
 
-                while i < j:
-                    i += 1
-                    if samples[i] - f / 2 <= 0:
-                        continue
-                    elif samples[i] + f / 2 > len(data):
-                        break
-                    if symbol[i] not in ecgClassSet:
-                        continue
-                    # 加入数据和标签
-                    x_data = data[int(samples[i] - f / 2):int(samples[i] + f / 2)]
-                    x_data = signal.resample(x_data, 250)
+            while i < j:
+                i += 1
+                if samples[i] - f / 2 <= 0:
+                    continue
+                elif samples[i] + f / 2 > len(data):
+                    break
+                if symbol[i] not in ecgClassSet:
+                    continue
+                # 加入数据和标签
+                x_data = data[int(samples[i] - f / 2):int(samples[i] + f / 2)]
+                x_data = signal.resample(x_data, 250)
 
-                    labelSet.append(ecgClassSet.index(symbol[i]))
+                labelSet.append(ecgClassSet.index(symbol[i]))
 
-                    dataSet.append(x_data)
+                dataSet.append(x_data)
 
-                    feat_sf = np.array(SF(x_data))
-                    feat_ar = np.array(ARC(x_data))
-                    feat_se = np.array(SE(x_data))
-                    wave, wv = WV(x_data)
-                    feat_wv = np.array(wv)
-                    feat_wav = np.array(wave)
-                    feat_hfd = np.array(HFD(x_data))
-                    featSet.append(np.concatenate((feat_sf, feat_ar, feat_se, feat_wv, feat_hfd, feat_wav), axis=None))
+                feat_sf = np.array(SF(x_data))
+                feat_ar = np.array(ARC(x_data))
+                feat_se = np.array(SE(x_data))
+                wave, wv = WV(x_data)
+                feat_wv = np.array(wv)
+                feat_wav = np.array(wave)
+                feat_hfd = np.array(HFD(x_data))
+                featSet.append(np.concatenate((feat_sf, feat_ar, feat_se, feat_wv, feat_hfd, feat_wav), axis=None))
 
-                    RR_interval = samples[i] - prev_sample
-                    prev_sample = samples[i]
-                    Kurt = np.around(np.array(kurtosis(x_data)), decimals=2)
-                    Skew = np.around(np.array(skews(x_data)), decimals=2)
+                RR_interval = samples[i] - prev_sample
+                prev_sample = samples[i]
+                Kurt = np.around(np.array(kurtosis(x_data)), decimals=2)
+                Skew = np.around(np.array(skews(x_data)), decimals=2)
 
-                    p_wave_index = np.argmax(x_data[0:125 - 5])
-                    q_wave_index = 125 - 25 + np.argmin(x_data[100:125])
-                    s_wave_index = 125 + np.argmin(x_data[125:150])
-                    t_wave_index = 125 + 5 + np.argmax(x_data[125 + 5:250])
+                p_wave_index = np.argmax(x_data[0:125 - 5])
+                q_wave_index = 125 - 25 + np.argmin(x_data[100:125])
+                s_wave_index = 125 + np.argmin(x_data[125:150])
+                t_wave_index = 125 + 5 + np.argmax(x_data[125 + 5:250])
 
-                    description = ['low', 'medium low', 'medium', 'medium high', 'high']
+                description = ['low', 'medium low', 'medium', 'medium high', 'high']
 
-                    if Kurt <= 0:
-                        kurt = description[0]
-                    elif 0 < Kurt <= 10:
-                        kurt = description[1]
-                    elif 10 < Kurt <= 20:
-                        kurt = description[2]
-                    elif 20 < Kurt <= 30:
-                        kurt = description[3]
-                    else:
-                        kurt = description[4]
+                if Kurt <= 0:
+                    kurt = description[0]
+                elif 0 < Kurt <= 10:
+                    kurt = description[1]
+                elif 10 < Kurt <= 20:
+                    kurt = description[2]
+                elif 20 < Kurt <= 30:
+                    kurt = description[3]
+                else:
+                    kurt = description[4]
 
-                    if Skew <= -1:
-                        skew = description[0]
-                    elif -1 < Skew <= 1:
-                        skew = description[1]
-                    elif 1 < Skew <= 3:
-                        skew = description[2]
-                    elif 3 < Skew <= 5:
-                        skew = description[3]
-                    else:
-                        skew = description[4]
+                if Skew <= -1:
+                    skew = description[0]
+                elif -1 < Skew <= 1:
+                    skew = description[1]
+                elif 1 < Skew <= 3:
+                    skew = description[2]
+                elif 3 < Skew <= 5:
+                    skew = description[3]
+                else:
+                    skew = description[4]
 
-                    if RR_interval <= 150:
-                        rr_interval = description[0]
-                    elif 150 < RR_interval <= 200:
-                        rr_interval = description[1]
-                    elif 200 < RR_interval <= 300:
-                        rr_interval = description[2]
-                    elif 300 < RR_interval <= 350:
-                        rr_interval = description[3]
-                    else:
-                        rr_interval = description[4]
+                if RR_interval <= 150:
+                    rr_interval = description[0]
+                elif 150 < RR_interval <= 200:
+                    rr_interval = description[1]
+                elif 200 < RR_interval <= 300:
+                    rr_interval = description[2]
+                elif 300 < RR_interval <= 350:
+                    rr_interval = description[3]
+                else:
+                    rr_interval = description[4]
 
-                    feature_summary = (
-                            "This ECG wave has a " + kurt + " kurtosis, a " + skew + " skewness, a " + rr_interval + " R-peak interval,"
-                                                                                                                     f"with P peak at timestamp {p_wave_index}, "
-                                                                                                                     f"Q peak at timestamp {q_wave_index}, "
-                                                                                                                     f"S peak at timestamp {s_wave_index}, "
-                                                                                                                     f"and T peak at timestamp {t_wave_index}.")
-                    corpus.append(feature_summary)
-            except Exception:
-                continue
+                feature_summary = (
+                        "This ECG wave has a " + kurt + " kurtosis, a " + skew + " skewness, a " + rr_interval + " R-peak interval,"
+                                                                                                                 f"with P peak at timestamp {p_wave_index}, "
+                                                                                                                 f"Q peak at timestamp {q_wave_index}, "
+                                                                                                                 f"S peak at timestamp {s_wave_index}, "
+                                                                                                                 f"and T peak at timestamp {t_wave_index}.")
+                corpus.append(feature_summary)
 
         # 重排列 & 分割数据集
         df = pd.DataFrame(dataSet)
@@ -272,5 +270,5 @@ def Plot(data, label):
 if __name__ == '__main__':
     if load_type == 1:
         load_data_raw()
-    else:
-        load_data_csv()
+    # else:
+    #     load_data_csv()

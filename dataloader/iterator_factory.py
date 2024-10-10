@@ -1,9 +1,8 @@
 import torch
-
+from dataloader.data_loader import DataIter, worker_init_fn
 
 def get_dataiter(root, set, batch_size, num_worker, mod='normal'):
     if mod == 'clip':
-        from data_loader import DataIter, worker_init_fn
         data_iter = DataIter(root, set)
 
     data_loader = torch.utils.data.DataLoader(data_iter, batch_size=batch_size, num_workers=num_worker,
