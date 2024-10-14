@@ -402,7 +402,7 @@ class model(object):
         if self.net.training:
             torch.set_grad_enabled(True)
             input_x = dats[0].float().cuda()
-            target_var = dats[1].float().cuda()
+            target = dats[1].float().cuda()
             input_hff = dats[2].float().cuda()
             prompt = dats[3].float().cuda()
         else:
@@ -410,12 +410,12 @@ class model(object):
             val = True
             with torch.no_grad():
                 input_x = dats[0].float().cuda()
-                target_var = dats[1].float().cuda()
+                target = dats[1].float().cuda()
                 input_hff = dats[2].float().cuda()
                 prompt = dats[3].float().cuda()
 
-        output = self.net.forward(input_x, input_hff, prompt, val=val)
-        loss = self.criterion(output, target_var)
+        output = self.net.forward(input_x, input_hff, prompt, val)
+        loss = self.criterion(output, target)
 
         return [output], [loss]
 

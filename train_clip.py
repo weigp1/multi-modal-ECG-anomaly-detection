@@ -14,7 +14,7 @@ from config import config
 from lib import metric_clip as metric  # 自定义度量
 from model_prompt import model  # 模型类
 from dataloader.iterator_factory import get_dataiter  # 数据迭代器工厂
-from network import bilstm_torch
+from network import bilstm_prompt
 from lib import criterions  # 损失函数
 
 # 禁用 cuDNN 以获得可重复性（性能较慢）
@@ -43,9 +43,9 @@ if __name__ == "__main__":
                                           config.data.num_worker, 'clip')
 
     # 根据需要获取提示信息
-    pmpt_1 = getattr(data_iter, 'pmpt', None)
+    pmpt = getattr(data_iter, 'pmpt', None)
 
-    sym_net = bilstm_torch.BiLSTMModel(X_shape=250, HFF_shape=250)
+    sym_net = bilstm_prompt.BiLSTMModel(X_shape=250, HFF_shape=250,prompt_dict=pmpt)
 
     sym_net.float()  # 转换网络权重到 float 类型
 
