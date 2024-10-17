@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
     net.test_load_checkpoint(load_path=config.test.model_path, model_name=config.test.model_name)
 
-    metrics = metric.MetricList(metric.RMSE(max_rul=config.data.max_rul))
+    metrics = metric.MetricList(metric.RMSE())
     net.data_iter = data_loader
     net.dataset = data_iter
     net.metrics = metrics
