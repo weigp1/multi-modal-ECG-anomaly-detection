@@ -2,45 +2,54 @@ import torch
 import numpy as np
 import torch.nn as nn
 
+from config import config
+
 
 # 定义使用PyTorch Lightning框架的双向LSTM模型
 class BiLSTMModel(nn.Module):
-    def __init__(self, X_shape, HFF_shape, prompt_dict):
+    def __init__(self, raw_input_dim, feat_input_dim, prompt_dict):
         super(BiLSTMModel, self).__init__()
 
         self.prompt_dict = torch.tensor(prompt_dict.values).float().cuda()  # 将提示字典转换为浮点数张量并移到 GPU 上
 
+        # 导入模型参数
+        hidden_dim = config.net.hidden_dim
+        linear_dim = config.net.linear_dim
+        output_dim = config.net.output_dim
+        prompt_dim = config.net.prompt_dim
+        dropout_rate = config.net.dropout
+
         # 原始数据流 LSTM 模型
         self.raw_lstm = nn.LSTM(
-            input_size=X_shape,
-            hidden_size=256,
-            bidirectional=True, 
+            input_size=raw_input_dim,
+            hidden_size=hidden_dim,
+            bidirectional=True,
             batch_first=True,
-            dropout=0,
+            dropout=dropout_rate,
         )
 
         # 原始数据流的全连接层
         self.raw_fc = nn.Sequential(
-            nn.Linear(512, 128),
+            nn.Linear(in_features=2*hidden_dim, out_features=linear_dim),
             nn.ReLU(inplace=True),
-            nn.Linear(128, out_features=64),
+            nn.Linear(in_features=linear_dim, out_features=output_dim),
             nn.ReLU(inplace=True)
         )
 
         # 特征数据流 LSTM 模型
         self.hff_lstm = nn.LSTM(
-            input_size=HFF_shape,
-            hidden_size=256,
+            input_size=feat_input_dim,
+            hidden_size=config.net.hidden_dim,
             bidirectional=True,
             batch_first=True,
-            dropout=0,
+            dropout=dropout_rate,
         )
 
         # 特征数据流的全连接层
         self.feat_fc = nn.Sequential(
-            nn.Linear(in_features=512, out_features=128),
+            nn.Linear(in_features=2*hidden_dim, out_features=linear_dim),
             nn.ReLU(inplace=True),
-            nn.Linear(128, out_features=64),
+            nn.Linear(in_features=linear_dim, out_features=output_dim),
             nn.ReLU(inplace=True)
         )
         
@@ -48,8 +57,8 @@ class BiLSTMModel(nn.Module):
         self.avg_pooling = nn.AdaptiveAvgPool1d(1)
 
         # 定义提示投影层
-        self.pmp_proj1 = nn.Linear(4096, 64)  # 线性层用于提示特征投影
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))  # 可学习的标量参数
+        self.pmp_proj1 = nn.Linear(in_features=prompt_dim, out_features=output_dim)     # 提示特征投影
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))              # 可学习的标量参数
 
 
     # 定义前向传播逻辑
@@ -82,7 +91,8 @@ class BiLSTMModel(nn.Module):
         # 对输出进行 L2 归一化
         feat_out = feat_out / feat_out.norm(dim=1, keepdim=True)
 
-        alpha = 0.3
+        # 合并双流输出
+        alpha = config.net.alpha
         combined_out = alpha * raw_out + (1 - alpha) * feat_out
 
         # 提示特征投影

@@ -58,7 +58,7 @@ if __name__ == "__main__":
     # 根据需要获取提示信息
     pmpt = getattr(data_iter, 'pmpt', None)
 
-    sym_net = bilstm_prompt.BiLSTMModel(X_shape=250, HFF_shape=529, prompt_dict=pmpt)
+    sym_net = bilstm_prompt.BiLSTMModel(raw_input_dim=config.net.raw_input_dim, feat_input_dim=config.net.feat_input_dim, prompt_dict=pmpt)
 
     sym_net.float()  # 转换网络权重到 float 类型
 

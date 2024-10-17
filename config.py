@@ -26,13 +26,14 @@ config.data.test_id = 0
 # network
 config.net = edict()
 config.net.name = 'bilstm'
-config.net.hand_craft = False
 config.net.alpha = 0.3
-
-config.net.num_hidden = 18
-config.net.input_dim = 9
-config.net.aux_dim = 4
-config.net.hand_dim = 0
+config.net.raw_input_dim = 250
+config.net.feat_input_dim = 529
+config.net.prompt_dim = 4096
+config.net.hidden_dim = 256
+config.net.linear_dim = 128
+config.net.output_dim = 64
+config.net.dropout = 0.2
 
 # train
 config.train = edict()
@@ -40,9 +41,9 @@ config.train.resume_epoch = False
 config.train.fine_tune = True
 config.train.batch_size = 4
 config.train.lr = 0.01
-config.train.lr_epoch = [2, 4]
+config.train.lr_epoch = [3]
 config.train.lr_factor = 0.1
-config.train.end_epoch = 10
+config.train.end_epoch = 5
 config.train.callback_freq = 50
 config.train.optimizer = 'adam'
 config.train.warmup_iters = 0
@@ -50,5 +51,5 @@ config.train.lr_mult = 0.2
 
 # test
 config.test = edict()
-config.test.model_name = 'exp_202410172030_bilstm_ep-0001.pth'  # 需要时常修改
+config.test.model_name = 'exp_202410172227_bilstm_ep-0005.pth'  # 需修改
 config.test.model_path = './model/'

@@ -223,8 +223,8 @@ class model(object):
             # 在指定的 epoch 间隔执行测试评估
             if (self.data_iter is not None) \
                     and ((i_epoch + 1) % max(1, int(self.save_checkpoint_freq / 2))) == 0:
-                self.dataset.reset('test')
-                self.test()
+                self.dataset.reset('val')
+                self.val()
 
             ###########
             # 3] Epoch 结束处理
@@ -302,8 +302,7 @@ class model(object):
         self.callback_kwargs['sample_elapse'] = sum_sample_elapse / sum_sample_inst
         self.callback_kwargs['update_elapse'] = sum_update_elapse / sum_sample_inst
         self.step_end_callback()
-        self.epoch_callback_kwargs['namevals'] += [[('Train_' + x[0][0], x[0][1])] for x in
-                                                   self.metrics.get_name_value()]
+        self.epoch_callback_kwargs['namevals'] += [[('Train_' + x[0][0], x[0][1])] for x in self.metrics.get_name_value()]
 
     def val(self):
         """
@@ -330,7 +329,7 @@ class model(object):
 
             preds = [dats[1][outputs[0][0].argmax(dim=-1).cpu().numpy()]]
             mse_loss = torch.pow((torch.tensor(preds[0]) - dats[1].cpu()), 2).mean()
-            self.metrics.update(preds, dats[1].cpu(), mse_loss)
+            self.metrics.update(preds, dats[1].cpu(), mse_loss, [loss.data.cpu() for loss in losses])
 
             sum_sample_elapse += time.time() - batch_start_time
             sum_update_elapse += time.time() - update_start_time
@@ -350,8 +349,7 @@ class model(object):
         self.callback_kwargs['sample_elapse'] = sum_sample_elapse / sum_sample_inst
         self.callback_kwargs['update_elapse'] = sum_update_elapse / sum_sample_inst
         self.step_end_callback()
-        self.epoch_callback_kwargs['namevals'] += [[('Val_' + x[0][0], x[0][1])] for x in
-                                                   self.metrics.get_name_value()]
+        self.epoch_callback_kwargs['namevals'] += [[('Val_' + x[0][0], x[0][1])] for x in self.metrics.get_name_value()]
 
     def test(self):
         """
@@ -405,8 +403,7 @@ class model(object):
         self.callback_kwargs['sample_elapse'] = sum_sample_elapse / sum_sample_inst
         self.callback_kwargs['update_elapse'] = sum_update_elapse / sum_sample_inst
         self.step_end_callback()
-        self.epoch_callback_kwargs['namevals'] += [[('Test_' + x[0][0], x[0][1])] for x in
-                                                   self.metrics.get_name_value()]
+        self.epoch_callback_kwargs['namevals'] += [[('Test_' + x[0][0], x[0][1])] for x in self.metrics.get_name_value()]
 
     def forward(self, dats):
         """
