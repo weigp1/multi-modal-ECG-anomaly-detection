@@ -2,6 +2,7 @@ import os
 import time
 import logging
 
+
 def create_logger(curr_path, cfg_file, cfg, use_time=True):
     # set up logger
     root_output_path = os.path.join(curr_path, 'output')
