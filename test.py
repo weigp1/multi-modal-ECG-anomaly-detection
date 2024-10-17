@@ -7,9 +7,9 @@ import warnings
 import numpy as np
 import torch.utils.data
 
-from lib import metric
 from config import config
 from model_prompt import model
+from lib import metric_clip as metric, criterions
 from network.bilstm_prompt import BiLSTMModel
 from dataloader.iterator_factory import get_dataiter
 
@@ -52,9 +52,9 @@ if __name__ == "__main__":
 
     model_prefix = os.path.join('exp_' + model_fixtime + '_' + config.net.name)
 
-    criterion=torch.nn.MSELoss().cuda()       # GPU
-    net = model(net=sym_net, criterion=torch.nn.MSELoss(), model_prefix=model_prefix, step_callback_freq=config.train.callback_freq,
-                save_checkpoint_freq=config.save_frequency, logger = logger) # CPU
+    # criterion = torch.nn.MSELoss().cuda()
+    net = model(net=sym_net, criterion=criterions.KLLoss_fast().cuda(), model_prefix=model_prefix, step_callback_freq=config.train.callback_freq,
+                save_checkpoint_freq=config.save_frequency, logger = logger) # GPU
             
     net.net.cuda() # GPU
     net.net = torch.nn.DataParallel(net.net).cuda() #GPU
@@ -81,14 +81,15 @@ if __name__ == "__main__":
 
         net.callback_kwargs['batch'] = i_batch
         update_start_time = time.time()
-        
+
         outputs, losses = net.forward(dats)
+
         # 更新度量指标
         preds = [outputs[0][0].argmax(dim=-1).cpu().numpy()]
         
         mse_loss = torch.pow((torch.tensor(preds[0]) - dats[1].cpu()), 2).mean()
-        self.metrics.update(preds, dats[1].cpu(), mse_loss, [loss.data.cpu() for loss in losses])
-        
+        metrics.update(preds, dats[1].cpu(), mse_loss, [loss.data.cpu() for loss in losses])
+
         # 计算accuracy
         truth = dats[1].cpu().numpy()
         correct = (preds == truth).sum()
@@ -114,10 +115,13 @@ if __name__ == "__main__":
     
     # retrive eval results and reset metic
     net.callback_kwargs['namevals'] = net.metrics.get_name_value()
-    accuracy = total_correct / net.dataset.end  # 假设net.dataset有长度属性，或者你需要从其他地方获取总样本数
+
+    accuracy = total_correct / net.dataset.end
     print(f'Test Accuracy: {accuracy:.4f}')
+
     # speed monitor
     net.callback_kwargs['sample_elapse'] = sum_sample_elapse / sum_sample_inst
     net.callback_kwargs['update_elapse'] = sum_update_elapse / sum_sample_inst
+
     # callbacks
     net.step_end_callback()

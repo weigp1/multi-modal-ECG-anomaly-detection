@@ -49,9 +49,9 @@ class EvalMetric(object):
             tuple: (指标名称, 指标值)。如果实例数量为0，则返回 NaN。
         """
         if self.num_inst == 0:
-            return (self.name, float('nan'))  # 如果没有实例，返回 NaN
+            return self.name, float('nan')  # 如果没有实例，返回 NaN
         else:
-            return (self.name, self.sum_metric / self.num_inst)  # 计算并返回平均指标值
+            return self.name, self.sum_metric / self.num_inst  # 计算并返回平均指标值
 
     def get_name_value(self):
         """
