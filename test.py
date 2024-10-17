@@ -4,6 +4,8 @@ import pprint
 import logging
 import random
 import warnings
+warnings.filterwarnings("ignore")
+
 import numpy as np
 import torch.utils.data
 

@@ -40,9 +40,9 @@ config.train.resume_epoch = False
 config.train.fine_tune = True
 config.train.batch_size = 4
 config.train.lr = 0.01
-config.train.lr_epoch = [10, 20]
+config.train.lr_epoch = [2, 4]
 config.train.lr_factor = 0.1
-config.train.end_epoch = 5
+config.train.end_epoch = 10
 config.train.callback_freq = 50
 config.train.optimizer = 'adam'
 config.train.warmup_iters = 0
@@ -50,5 +50,5 @@ config.train.lr_mult = 0.2
 
 # test
 config.test = edict()
-config.test.model_name = 'exp_202410171224_bilstm_ep-0010.pth'
+config.test.model_name = 'exp_202410172030_bilstm_ep-0001.pth'  # 需要时常修改
 config.test.model_path = './model/'
