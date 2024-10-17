@@ -10,7 +10,6 @@ import torch.utils.data
 from lib import metric
 from config import config
 from model_prompt import model
-from dataloader import data_loader
 from network.bilstm_prompt import BiLSTMModel
 from dataloader.iterator_factory import get_dataiter
 
@@ -43,11 +42,7 @@ if __name__ == "__main__":
                         'You may see unexpected behavior when restarting '
                         'from checkpoints.')
 
-    _, data_iter = get_dataiter(config.data.root, config.data.set, config.train.batch_size,
-                                config.data.num_worker, 'clip')
-
-    data_loader = torch.utils.data.DataLoader(data_iter, batch_size=config.train.batch_size, num_workers=config.data.num_worker,
-                                                pin_memory=True, worker_init_fn=data_loader.worker_init_fn)
+    data_loader, data_iter = get_dataiter(config.data.root, config.data.set, config.train.batch_size, config.data.num_worker, 'clip')
 
     # 根据需要获取提示信息
     pmpt = getattr(data_iter, 'pmpt', None)
@@ -72,7 +67,7 @@ if __name__ == "__main__":
     net.metrics = metrics
 
     # test loop:
-    net.dataset.reset()
+    net.dataset.reset('test')
     net.metrics.reset()
     net.net.eval()
     sum_sample_inst = 0
@@ -80,17 +75,24 @@ if __name__ == "__main__":
     sum_update_elapse = 0
     net.callback_kwargs['prefix'] = 'Test'
     batch_start_time = time.time()
+    total_correct = 0
 
     for i_batch, dats in enumerate(net.data_iter):
 
         net.callback_kwargs['batch'] = i_batch
         update_start_time = time.time()
-        # [forward] making next step
+        
         outputs, losses = net.forward(dats)
-
-        # [evaluation] update train metric
-        metrics.update([output.data.cpu() for output in outputs], dats[-1].cpu(),
-                        [loss.data.cpu() for loss in losses])
+        # 更新度量指标
+        preds = [outputs[0][0].argmax(dim=-1).cpu().numpy()]
+        
+        mse_loss = torch.pow((torch.tensor(preds[0]) - dats[1].cpu()), 2).mean()
+        self.metrics.update(preds, dats[1].cpu(), mse_loss, [loss.data.cpu() for loss in losses])
+        
+        # 计算accuracy
+        truth = dats[1].cpu().numpy()
+        correct = (preds == truth).sum()
+        total_correct += correct
 
         # timing each batch
         sum_sample_elapse += time.time() - batch_start_time
@@ -112,6 +114,8 @@ if __name__ == "__main__":
     
     # retrive eval results and reset metic
     net.callback_kwargs['namevals'] = net.metrics.get_name_value()
+    accuracy = total_correct / net.dataset.end  # 假设net.dataset有长度属性，或者你需要从其他地方获取总样本数
+    print(f'Test Accuracy: {accuracy:.4f}')
     # speed monitor
     net.callback_kwargs['sample_elapse'] = sum_sample_elapse / sum_sample_inst
     net.callback_kwargs['update_elapse'] = sum_update_elapse / sum_sample_inst
