@@ -1,27 +1,18 @@
-import logging
 import os
-import argparse
-import pprint
-from datetime import date
 import time
-
-import numpy as np
+import pprint
+import logging
 import random
 import warnings
-import torch
+import numpy as np
 import torch.utils.data
 
-from config import config
-from dataloader.iterator_factory import get_dataiter
-from lib import create_logger
 from lib import metric
-
-import model_prompt
-from dataloader import data_loader
+from config import config
 from model_prompt import model
-
+from dataloader import data_loader
 from network.bilstm_prompt import BiLSTMModel
-
+from dataloader.iterator_factory import get_dataiter
 
 # torch.backends.cudnn.enabled = False
 

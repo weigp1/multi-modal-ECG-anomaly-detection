@@ -2,7 +2,7 @@ easydict==1.13
 keras==3.6.0
 matplotlib==3.9.2
 model==0.6.0
-numpy==2.1.2
+numpy~=1.24.0
 pandas==2.2.3
 pytorch_lightning==2.4.0
 # scikit_learn==1.5.2
@@ -12,3 +12,4 @@ statsmodels==0.14.4
 torch==2.4.1
 # torchmetrics==1.4.3
 wfdb==4.1.2
+PyWavelets~=1.7.0

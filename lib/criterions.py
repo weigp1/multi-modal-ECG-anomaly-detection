@@ -1,7 +1,8 @@
+import torch
 import numpy as np
 from torch import nn
-import torch
 import torch.nn.functional as F
+
 
 class CLIP_loss(nn.Module):
     def __init__(self, weight=1.0):

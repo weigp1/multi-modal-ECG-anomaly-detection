@@ -3,10 +3,10 @@ import wfdb
 import pywt
 import numpy as np
 import pandas as pd
+from scipy import signal
 import statsmodels.api as sm
 from matplotlib import pyplot as plt
 from scipy.stats import kurtosis, skew as skews
-from scipy import signal
 
 from HFD import HFD
 

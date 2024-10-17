@@ -1,6 +1,6 @@
 import os
-import logging
 import time
+import logging
 
 def create_logger(curr_path, cfg_file, cfg, use_time=True):
     # set up logger

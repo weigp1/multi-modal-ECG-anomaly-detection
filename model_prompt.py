@@ -1,13 +1,8 @@
-# 导入必要的库和模块
 import os                               # 用于文件和目录操作
 import sys                              # 用于与系统交互（如添加路径）
 import time                             # 用于时间测量
 import logging                          # 用于记录日志
-import json                             # 用于处理JSON数据
-import random                           # 用于生成随机数
-from collections import OrderedDict     # 用于保持字典项的顺序
 import torch                            # 用于使用PyTorch框架
-import numpy as np                      # 用于数值计算
 from lib import callback                # 用于处理回调函数（自定义模块）
 
 

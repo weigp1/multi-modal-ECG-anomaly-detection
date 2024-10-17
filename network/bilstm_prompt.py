@@ -1,8 +1,7 @@
-import os
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import numpy as np
+import torch.nn as nn
+
 
 # 定义使用PyTorch Lightning框架的双向LSTM模型
 class BiLSTMModel(nn.Module):
