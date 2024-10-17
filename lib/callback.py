@@ -20,7 +20,8 @@ class Callback(object):
             if batch is not None:
                 str_out += "Batch{:s}\t".format(("[%d]"%batch))
         return str_out
- 
+
+
 class CallbackList(Callback):
 
     def __init__(self, *args, with_header=True):
@@ -66,6 +67,7 @@ class SpeedMonitor(Callback):
             self.logger.info(str_out)
             # print(str_out)
         return str_out
+
 
 class MetricPrinter(Callback):
 

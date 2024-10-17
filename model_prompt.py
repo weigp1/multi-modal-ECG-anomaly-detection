@@ -8,7 +8,8 @@ import random                           # 用于生成随机数
 from collections import OrderedDict     # 用于保持字典项的顺序
 import torch                            # 用于使用PyTorch框架
 import numpy as np                      # 用于数值计算
-import callback                         # 用于处理回调函数（自定义模块）
+from lib import callback                # 用于处理回调函数（自定义模块）
+
 
 # 将'lib'目录插入系统路径，以便访问自定义库
 sys.path.insert(0, '../lib')
@@ -19,17 +20,18 @@ class model(object):
     代表深度学习模型的类，用于训练、验证、测试以及管理检查点。
     """
 
-    def __init__(self, net, criterion, step_callback=None, step_callback_freq=50, epoch_callback=None,
+    def __init__(self, net, criterion, model_prefix='', step_callback=None, step_callback_freq=50, epoch_callback=None,
                  save_checkpoint_freq=1, logger=None):
         """
         初始化模型，包含神经网络、损失函数、以及每一步和每个epoch的可选回调函数。
         """
         # 初始化关键参数
-        self.net = net  # 网络模型
-        self.criterion = criterion  # 损失函数
-        self.step_callback_freq = step_callback_freq  # 步骤回调的频率
-        self.save_checkpoint_freq = save_checkpoint_freq  # 保存检查点的频率
-        self.logger = logger  # 日志记录器
+        self.net = net                                      # 网络模型
+        self.criterion = criterion                          # 损失函数
+        self.model_prefix = model_prefix                    # 模型前缀，用于保存和加载模型
+        self.step_callback_freq = step_callback_freq        # 步骤回调的频率
+        self.save_checkpoint_freq = save_checkpoint_freq    # 保存检查点的频率
+        self.logger = logger                                # 日志记录器
 
         # 定义回调函数的参数
         self.callback_kwargs = {'epoch': None, 'batch': None, 'sample_elapse': None, 'update_elapse': None,
@@ -50,11 +52,13 @@ class model(object):
         self.step_callback = step_callback
         self.epoch_callback = epoch_callback
 
+
     def step_end_callback(self):
         """
         在每个步骤结束时执行的回调函数。
         """
-        self.step_callback(**(self.callback_kwargs))  # 执行步骤回调
+        self.step_callback(**self.callback_kwargs)  # 执行步骤回调
+
 
     def epoch_end_callback(self):
         """
@@ -66,16 +70,15 @@ class model(object):
         # 如果存在epoch耗时，记录日志
         if self.callback_kwargs['epoch_elapse'] is not None:
             logging.info("Final_Epoch [{:d}]   time cost: {:.2f} sec ({:.2f} h)".format(
-                self.callback_kwargs['epoch'], self.callback_kwargs['epoch_elapse'],
-                self.callback_kwargs['epoch_elapse'] / 3600.))
+                self.callback_kwargs['epoch'], self.callback_kwargs['epoch_elapse'], self.callback_kwargs['epoch_elapse'] / 3600.))
 
         # 最终epoch回调
         self.epoch_callback(**(self.epoch_callback_kwargs))
 
         # 根据检查点频率决定是否保存模型
         if self.callback_kwargs['epoch'] == 0 or ((self.callback_kwargs['epoch'] + 1) % self.save_checkpoint_freq) == 0:
-            self.save_checkpoint(epoch=self.callback_kwargs['epoch'] + 1,
-                                 optimizer_state=self.callback_kwargs['optimizer_dict'])
+            self.save_checkpoint(epoch=self.callback_kwargs['epoch'] + 1, optimizer_state=self.callback_kwargs['optimizer_dict'])
+
 
     def load_state(self, state_dict, strict=False):
         """
@@ -101,17 +104,18 @@ class model(object):
                     if 'num_batches_tracked' in net_state_keys[i]:
                         num_batches_list.append(net_state_keys[i])
                 pruned_additional_states = [x for x in net_state_keys if x not in num_batches_list]
-                logging.info("当前网络中有未通过预训练初始化的层")
-                logging.warning(">> 加载失败的层: {}".format(pruned_additional_states))
+                logging.info("There are layers in current network not initialized by pretrained")
+                logging.warning(">> Failed to load: {}".format(pruned_additional_states))
                 return False
         return True
+
 
     def load_checkpoint(self, epoch, optimizer=None):
         """
         加载指定epoch的模型检查点。
         """
-        load_path = '../result/'  # 检查点存放路径
-        assert os.path.exists(load_path), "加载失败: {} (文件不存在)".format(load_path)
+        load_path = './output/'  # 检查点存放路径
+        assert os.path.exists(load_path), "Failed to load: {} (file not exist)".format(load_path)
 
         checkpoint = torch.load(load_path)  # 加载检查点
 
@@ -121,23 +125,24 @@ class model(object):
             # 如果存在优化器的状态且所有参数匹配，加载优化器的状态
             if 'optimizer' in checkpoint.keys() and all_params_matched:
                 optimizer.load_state_dict(checkpoint['optimizer'])
-                logging.info("模型和优化器状态从`{}'恢复".format(load_path))
+                logging.info("Model & Optimizer states are resumed from: `{}'".format(load_path))
             else:
-                logging.warning(">> 从`{}'加载优化器状态失败".format(load_path))
+                logging.warning(">> Failed to load optimizer state from: `{}'".format(load_path))
         else:
-            logging.info("仅恢复模型状态: `{}'".format(load_path))
+            logging.info("Only model state resumed from: `{}'".format(load_path))
 
         # 检查检查点中的epoch信息
         if 'epoch' in checkpoint.keys():
             if checkpoint['epoch'] != epoch:
-                logging.warning(">> Epoch信息不一致: {} vs {}".format(checkpoint['epoch'], epoch))
+                logging.warning(">> Epoch information inconsistant: {} vs {}".format(checkpoint['epoch'], epoch))
+
 
     def save_checkpoint(self, epoch, optimizer_state=None):
         """
         保存当前模型和优化器的状态到检查点。
         """
-        save_path = self.get_checkpoint_path(epoch)  # 获取保存路径
-        save_folder = os.path.dirname(save_path)  # 获取保存文件夹路径
+        save_path = self.get_checkpoint_path(epoch)     # 获取保存路径
+        save_folder = os.path.dirname(save_path)        # 获取保存文件夹路径
 
         # 如果文件夹不存在，创建它
         if not os.path.exists(save_folder):
@@ -147,10 +152,28 @@ class model(object):
         # 保存模型状态和（可选的）优化器状态
         if not optimizer_state:
             torch.save({'epoch': epoch, 'state_dict': self.net.state_dict()}, save_path)
-            logging.info("检查点（仅模型）保存到: {}".format(save_path))
+            logging.info("Checkpoint (only model) saved to: {}".format(save_path))
         else:
             torch.save({'epoch': epoch, 'state_dict': self.net.state_dict(), 'optimizer': optimizer_state}, save_path)
-            logging.info("检查点（模型和优化器）保存到: {}".format(save_path))
+            logging.info("Checkpoint (model & optimizer) saved to: {}".format(save_path))
+
+
+    def get_checkpoint_path(self, epoch):
+        # 获取检查点的路径
+        assert self.model_prefix, "model_prefix undefined!"
+        checkpoint_path = "./model/{}_ep-{:04d}.pth".format(self.model_prefix, epoch)
+        return checkpoint_path
+
+
+    def test_load_checkpoint(self, load_path, model_name, optimizer=None):
+        # 测试加载模型检查点
+        checkpoint_path = os.path.join(load_path, model_name)
+        assert os.path.exists(checkpoint_path), "Failed to load: {} (file not exist)".format(checkpoint_path)
+
+        checkpoint = torch.load(checkpoint_path)
+        all_params_matched = self.load_state(checkpoint['state_dict'], strict=True)
+        logging.info("Load model from: `{}'".format(checkpoint_path))
+
 
     def fit(self, data_iter, dataset, optimizer, lr_scheduler, metrics=None, epoch_start=0, epoch_end=10000):
         """
@@ -231,15 +254,15 @@ class model(object):
         3. 计算并记录每批次的度量结果和速度。
         4. 调用回调函数更新训练状态。
         """
-        self.metrics.reset()  # 重置度量指标
-        self.net.train()  # 设置模型为训练模式
+        self.metrics.reset()                        # 重置度量指标
+        self.net.train()                            # 设置模型为训练模式
 
-        sum_sample_inst = 0  # 累计处理的样本数
-        sum_sample_elapse = 0.  # 样本处理时间
-        sum_update_elapse = 0  # 参数更新时间
-        batch_start_time = time.time()  # 记录批次开始时间
+        sum_sample_inst = 0                         # 累计处理的样本数
+        sum_sample_elapse = 0.                      # 样本处理时间
+        sum_update_elapse = 0                       # 参数更新时间
+        batch_start_time = time.time()              # 记录批次开始时间
 
-        self.callback_kwargs['prefix'] = 'Train'  # 设置回调函数前缀
+        self.callback_kwargs['prefix'] = 'Train'    # 设置回调函数前缀
 
         i = 0  # 批次数初始化
 
@@ -248,6 +271,7 @@ class model(object):
             self.callback_kwargs['batch'] = i_batch
 
             update_start_time = time.time()
+
             # 前向传播与损失计算
             outputs, losses = self.forward(dats)
 
@@ -259,13 +283,14 @@ class model(object):
 
             # 更新度量指标
             preds = [outputs[0][0].argmax(dim=-1).cpu().numpy()]
-            mse_loss = torch.pow((preds[0] - dats[2].cpu()), 2).mean()
-            self.metrics.update(preds, dats[2].cpu(), mse_loss, [loss.data.cpu() for loss in losses])
+            mse_loss = torch.pow((torch.tensor(preds[0]) - dats[1].cpu()), 2).mean()
+            self.metrics.update(preds, dats[1].cpu(), mse_loss, [loss.data.cpu() for loss in losses])
 
             sum_sample_elapse += time.time() - batch_start_time
             sum_update_elapse += time.time() - update_start_time
             batch_start_time = time.time()
             sum_sample_inst += dats[0].shape[0]
+            # print(dats[0].shape)
 
             # 每隔指定步数调用回调函数
             if (i_batch % self.step_callback_freq) == 0:
@@ -308,9 +333,9 @@ class model(object):
 
             outputs, losses = self.forward(dats)
 
-            preds = [dats[2][outputs[0][0].argmax(dim=-1).cpu().numpy()]]
-            mse_loss = torch.pow((preds[0] - dats[2].cpu()), 2).mean()
-            self.metrics.update(preds, dats[2].cpu(), mse_loss)
+            preds = [dats[1][outputs[0][0].argmax(dim=-1).cpu().numpy()]]
+            mse_loss = torch.pow((torch.tensor(preds[0]) - dats[1].cpu()), 2).mean()
+            self.metrics.update(preds, dats[1].cpu(), mse_loss)
 
             sum_sample_elapse += time.time() - batch_start_time
             sum_update_elapse += time.time() - update_start_time
@@ -364,8 +389,8 @@ class model(object):
                     ((preds_mask * sorted_preds).sum(dim=1, keepdim=True)) * 125.0)
             final_preds = [final_preds.cpu()]
 
-            mse_loss = torch.pow((final_preds[0] - dats[2].cpu()), 2).mean()
-            self.metrics.update(final_preds, dats[2].cpu(), mse_loss, [loss.data.cpu() for loss in losses])
+            mse_loss = torch.pow((torch.tensor(final_preds[0]) - dats[1].cpu()), 2).mean()
+            self.metrics.update(final_preds, dats[1].cpu(), mse_loss, [loss.data.cpu() for loss in losses])
 
             sum_sample_elapse += time.time() - batch_start_time
             sum_update_elapse += time.time() - update_start_time

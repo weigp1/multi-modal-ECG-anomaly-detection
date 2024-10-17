@@ -119,7 +119,7 @@ def pca_with_svd(data, num_components):
 
 # 导入数据，进行预处理
 def load_data_raw():
-    print("load data by raw now")
+    print("load dataset by raw now")
     for index in range(len(dataSets)):
         dataSet = []
         featSet = []
@@ -230,18 +230,18 @@ def load_data_raw():
 
         # 重排列 & 分割数据集
         df = pd.DataFrame(dataSet)
-        df.to_csv('../benchmark/dataSet_' + dataSets[index] + '.csv', index=False)
+        df.to_csv('../dataset/dataSet_' + dataSets[index] + '.csv', index=False)
 
         df = pd.DataFrame(labelSet)
-        df.to_csv('../benchmark/labelSet_' + dataSets[index] + '.csv', index=False)
+        df.to_csv('../dataset/labelSet_' + dataSets[index] + '.csv', index=False)
 
         featSet = np.array(featSet)
         df = pd.DataFrame(featSet)
-        df.to_csv('../benchmark/featSet_' + dataSets[index] + '.csv', index=False)
+        df.to_csv('../dataset/featSet_' + dataSets[index] + '.csv', index=False)
 
         corpus = np.array(corpus)
-        df = pd.DataFrame(corpus)
-        df.to_csv('../benchmark/corpus_' + dataSets[index] + '.csv', index=False)
+        df = pd.DataFrame(corpus, columns=["text"])
+        df.to_csv('../dataset/corpus_' + dataSets[index] + '.csv', index=False)
 
         # SVD奇异值分解
         # print('Before SVD: ', featSet.shape)

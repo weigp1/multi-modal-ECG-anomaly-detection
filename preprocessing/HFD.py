@@ -90,7 +90,7 @@ def lin_fit_hfd(k, L, log=True):
 
 def HFD(X, **kwargs):
     """
-    Calculate Higuchi Fractal Dimension (HFD) for 1D data/series
+    Calculate Higuchi Fractal Dimension (HFD) for 1D dataset/series
 
     Input:
 

@@ -36,9 +36,9 @@ def train_test_split(X, y, hff, test_ratio=0.3, seed=None):
 # 定义一个函数用于加载数据
 def load_data(name):
     # 拼接文件路径
-    dataPath = './benchmark/' + name + '/dataSet_' + name
-    labelPath = './benchmark/' + name + '/labelSet_' + name
-    featPath = './benchmark/' + name + '/featSet_' + name
+    dataPath = './dataset/' + name + '/dataSet_' + name
+    labelPath = './dataset/' + name + '/labelSet_' + name
+    featPath = './dataset/' + name + '/featSet_' + name
 
     # 加载原始数据与标签
     df = pd.read_csv(dataPath + '.csv').dropna()
