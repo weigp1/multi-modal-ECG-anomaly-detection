@@ -27,7 +27,6 @@ if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     logger.info('Training configuration:{}\n'.format(pprint.pformat(config)))
-    vis = True
 
     os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu #enable GPU
 
@@ -35,9 +34,9 @@ if __name__ == "__main__":
         random.seed(config.seed)
         np.random.seed(config.seed)
         torch.manual_seed(config.seed)
-        # torch.cuda.manual_seed(config.seed) # GPU
-        # torch.backends.cudnn.deterministic = True  # GPU
-        # torch.backends.cudnn.benchmark = False  # GPU
+        torch.cuda.manual_seed(config.seed) # GPU
+        torch.backends.cudnn.deterministic = True  # GPU
+        torch.backends.cudnn.benchmark = False  # GPU
         warnings.warn('You have chosen to seed training. '
                         'This will turn on the CUDNN deterministic setting, '
                         'which can slow down your training considerably! '
@@ -47,7 +46,7 @@ if __name__ == "__main__":
     _, data_iter = get_dataiter(config.data.root, config.data.set, config.train.batch_size,
                                 config.data.num_worker, 'clip')
 
-    alldata_loader = torch.utils.data.DataLoader(data_iter, batch_size=config.train.batch_size, num_workers=config.data.num_worker,
+    data_loader = torch.utils.data.DataLoader(data_iter, batch_size=config.train.batch_size, num_workers=config.data.num_worker,
                                                 pin_memory=True, worker_init_fn=data_loader.worker_init_fn)
 
     # 根据需要获取提示信息
@@ -58,18 +57,17 @@ if __name__ == "__main__":
 
     model_prefix = os.path.join('exp_' + model_fixtime + '_' + config.net.name)
 
-    # criterion=torch.nn.MSELoss().cuda()       # GPU
+    criterion=torch.nn.MSELoss().cuda()       # GPU
     net = model(net=sym_net, criterion=torch.nn.MSELoss(), model_prefix=model_prefix, step_callback_freq=config.train.callback_freq,
                 save_checkpoint_freq=config.save_frequency, logger = logger) # CPU
             
-    # net.net.cuda() # GPU
-    # net.net = torch.nn.DataParallel(net.net).cuda() #GPU
+    net.net.cuda() # GPU
+    net.net = torch.nn.DataParallel(net.net).cuda() #GPU
 
-    net.net = torch.nn.DataParallel(net.net) #CPU
     net.test_load_checkpoint(load_path=config.test.model_path, model_name=config.test.model_name)
 
-    metrics = metric.MetricList(metric.RMSE(max_rul=config.data.max_rul), metric.RULscore(max_rul=config.data.max_rul),)
-    net.data_iter = alldata_loader
+    metrics = metric.MetricList(metric.RMSE(max_rul=config.data.max_rul))
+    net.data_iter = data_loader
     net.dataset = data_iter
     net.metrics = metrics
 
@@ -82,10 +80,6 @@ if __name__ == "__main__":
     sum_update_elapse = 0
     net.callback_kwargs['prefix'] = 'Test'
     batch_start_time = time.time()
-
-    if vis:
-        rul = []
-        gt = []
 
     for i_batch, dats in enumerate(net.data_iter):
 
@@ -115,12 +109,6 @@ if __name__ == "__main__":
             sum_sample_inst = 0
             # callbacks
             net.step_end_callback()
-        
-        #record RUL results for visulization
-        if vis:
-            rul.extend(outputs[0].cpu().numpy()[:,0].tolist())
-            gt.extend(dats[-1].numpy()[:,0].tolist())
-            res = {'rul': rul, 'gt': gt}
     
     # retrive eval results and reset metic
     net.callback_kwargs['namevals'] = net.metrics.get_name_value()
@@ -129,10 +117,3 @@ if __name__ == "__main__":
     net.callback_kwargs['update_elapse'] = sum_update_elapse / sum_sample_inst
     # callbacks
     net.step_end_callback()
-
-    if vis:
-        import pickle
-        res_pt = 'res/{:}_{:}_test.pkl'.format(config.data.set, config.net.name)
-        with open(res_pt, 'wb') as f:
-            pickle.dump(res, f)
-        print("Save the test results at {:}".format(res_pt))
