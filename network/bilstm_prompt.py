@@ -5,12 +5,13 @@ import torch.nn as nn
 from config import config
 
 
-# 定义使用PyTorch Lightning框架的双向LSTM模型
+# 定义使用 PyTorch Lightning 框架的双向LSTM模型
 class BiLSTMModel(nn.Module):
     def __init__(self, raw_input_dim, feat_input_dim, prompt_dict):
         super(BiLSTMModel, self).__init__()
 
-        self.prompt_dict = torch.tensor(prompt_dict.values).float().cuda()  # 将提示字典转换为浮点数张量并移到 GPU 上
+        # 将提示字典转换为浮点数张量并移到 GPU 上
+        self.prompt_dict = torch.tensor(prompt_dict.values).float().cuda()
 
         # 导入模型参数
         raw_hidden_dim = config.net.raw_hidden_dim
@@ -77,9 +78,6 @@ class BiLSTMModel(nn.Module):
         raw_out = raw_out.reshape(-1, hidden_dim)
         raw_out = self.raw_fc(raw_out)
 
-        # 平均池化
-        # raw_out = self.avg_pooling(raw_out)
-
         # L2 归一化
         raw_out = raw_out / raw_out.norm(dim=1, keepdim=True)
 
@@ -91,9 +89,6 @@ class BiLSTMModel(nn.Module):
         hidden_dim = feat_out.shape[-1]
         feat_out = feat_out.reshape(-1, hidden_dim)
         feat_out = self.feat_fc(feat_out)
-
-        # 平均池化
-        # feat_out = self.avg_pooling(feat_out)
 
         # L2 归一化
         feat_out = feat_out / feat_out.norm(dim=1, keepdim=True)
@@ -107,15 +102,15 @@ class BiLSTMModel(nn.Module):
         pmp_feat = pmp_feat / pmp_feat.norm(dim=1, keepdim=True)
 
         # 计算 logits
-        logit_scale = self.logit_scale.exp()  # 应用 exp 函数
-        logits_per_x = logit_scale * combined_out @ pmp_feat.t()  # 计算 logits
+        logit_scale = self.logit_scale.exp()                        # 应用 exp 函数
+        logits_per_x = logit_scale * combined_out @ pmp_feat.t()    # 计算 logits
         logits_per_pmp = logits_per_x.t()
 
         # 如果是验证阶段，计算预测 logits
         if val:
-            preds_feat = self.pmp_proj1(self.prompt_dict)  # 投影提示字典
+            preds_feat = self.pmp_proj1(self.prompt_dict)                   # 投影提示字典
             preds_feat = preds_feat / preds_feat.norm(dim=1, keepdim=True)  # 归一化
-            logits_per_pred = logit_scale * combined_out @ preds_feat.t()  # 计算文本到预测的 logits
+            logits_per_pred = logit_scale * combined_out @ preds_feat.t()   # 计算文本到预测的 logits
             return logits_per_x, logits_per_pmp, logits_per_pred
 
         # 返回 logits

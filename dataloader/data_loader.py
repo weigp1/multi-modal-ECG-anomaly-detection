@@ -67,8 +67,8 @@ class DataIter(data.IterableDataset):
         data_hff = pd.read_csv(data_hff_pt, sep=",", header=None)
         data_pmpt = pd.read_csv(data_pmpt_pt, sep=",", header=None)
 
-        assert data_x.shape[0] == data_y.shape[0], '样本和标签个数不一致'
-        assert 0 <= test_ratio < 1, '无效的测试比例'
+        assert data_x.shape[0] == data_y.shape[0], 'The number of samples and labels is inconsistent'
+        assert 0 <= test_ratio < 1, 'The ratio of the test set is invalid'
 
         if seed:
             np.random.seed(seed)

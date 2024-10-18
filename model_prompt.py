@@ -68,7 +68,7 @@ class model(object):
                 self.callback_kwargs['epoch'], self.callback_kwargs['epoch_elapse'], self.callback_kwargs['epoch_elapse'] / 3600.))
 
         # 最终epoch回调
-        self.epoch_callback(**(self.epoch_callback_kwargs))
+        self.epoch_callback(**self.epoch_callback_kwargs)
 
         # 根据检查点频率决定是否保存模型
         if self.callback_kwargs['epoch'] == 0 or ((self.callback_kwargs['epoch'] + 1) % self.save_checkpoint_freq) == 0:
