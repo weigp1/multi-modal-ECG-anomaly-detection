@@ -50,7 +50,7 @@ class DataIter(data.IterableDataset):
         logging.info("DataIter:: initialize the dataloader")
 
 
-    def _get_data(self, data_root, data_set, test_ratio=0.2, seed=None):
+    def _get_data(self, data_root, data_set, test_ratio=0.2):
         data_x_pt = Path(data_root) / f'dataSet_{data_set}.csv'
         data_y_pt = Path(data_root) / f'labelSet_{data_set}.csv'
         data_hff_pt = Path(data_root) / f'featSet_{data_set}.csv'
@@ -64,8 +64,7 @@ class DataIter(data.IterableDataset):
         assert data_x.shape[0] == data_y.shape[0], 'The number of samples and labels is inconsistent'
         assert 0 <= test_ratio < 1, 'The ratio of the test set is invalid'
 
-        if seed:
-            np.random.seed(seed)
+        np.random.seed(seed)
 
         shuffled_indexes = np.random.permutation(len(data_x))
         test_size = int(len(data_x) * test_ratio)
@@ -172,16 +171,6 @@ class DataIter(data.IterableDataset):
             self.out_hff = self.test_hff
             self.out_prompt = self.test_pmpt
             self.end = len(self.out_x)
-
-
-    # def __iter__(self):
-    #     out_x = self.out_x.iloc[self.start: self.end]
-    #     out_y = self.out_y.iloc[self.start: self.end]
-    #     out_hff = self.out_hff.iloc[self.start: self.end]
-    #     out_prompt = self.out_prompt.iloc[self.start: self.end]
-    #     sum_iter = zip(out_x, out_y, out_hff, out_prompt)
-    #
-    #     return iter(sum_iter)
 
     def __iter__(self):
         out_x = torch.tensor(self.out_x.iloc[self.start: self.end].values, dtype=torch.float32)
