@@ -16,6 +16,7 @@ class BiLSTMModel(nn.Module):
         # 导入模型参数
         raw_hidden_dim = config.net.raw_hidden_dim
         raw_linear_dim = config.net.raw_linear_dim
+        raw_hidden_dim_2 = config.net.raw_hidden_dim_2
         feat_hidden_dim = config.net.feat_hidden_dim
         feat_linear_dim = config.net.feat_linear_dim
         output_dim = config.net.output_dim
@@ -31,26 +32,34 @@ class BiLSTMModel(nn.Module):
             dropout=dropout_rate,
         )
 
+        self.raw_lstm_2 = nn.LSTM(
+            input_size=2*raw_hidden_dim,
+            hidden_size=raw_hidden_dim_2,
+            bidirectional=True,
+            batch_first=True,
+            dropout = dropout_rate,
+        )
+
         # 原始数据流的全连接层
         self.raw_fc = nn.Sequential(
-            nn.Linear(in_features=2*raw_hidden_dim, out_features=raw_linear_dim),
+            nn.Linear(in_features=2*raw_hidden_dim_2, out_features=raw_linear_dim),
             nn.ReLU(inplace=True),
             nn.Linear(in_features=raw_linear_dim, out_features=output_dim),
             nn.ReLU(inplace=True),
         )
 
         # 特征数据流 LSTM 模型
-        self.hff_lstm = nn.LSTM(
-            input_size=feat_input_dim,
-            hidden_size=feat_hidden_dim,
-            bidirectional=True,
-            batch_first=True,
-            dropout=dropout_rate,
-        )
+        # self.hff_lstm = nn.LSTM(
+        #     input_size=feat_input_dim,
+        #     hidden_size=feat_hidden_dim,
+        #     bidirectional=True,
+        #     batch_first=True,
+        #     dropout=dropout_rate,
+        # )
 
         # 特征数据流的全连接层
         self.feat_fc = nn.Sequential(
-            nn.Linear(in_features=2*feat_hidden_dim, out_features=feat_linear_dim),
+            nn.Linear(in_features=feat_input_dim, out_features=feat_linear_dim),
             nn.ReLU(inplace=True),
             nn.Linear(in_features=feat_linear_dim, out_features=output_dim),
             nn.ReLU(inplace=True),
@@ -72,6 +81,7 @@ class BiLSTMModel(nn.Module):
         # 原始数据流LSTM层
         raw_input = torch.tensor(raw_input, dtype=torch.float32).unsqueeze(1)   # torch.Size([4, 1, 250])
         raw_out = self.raw_lstm(raw_input)[0]
+        raw_out = self.raw_lstm_2(raw_out)[0]
 
         # 线性变化
         hidden_dim = raw_out.shape[-1]
@@ -82,13 +92,13 @@ class BiLSTMModel(nn.Module):
         raw_out = raw_out / raw_out.norm(dim=1, keepdim=True)
 
         # 特征数据流LSTM层
-        feat_input = torch.tensor(feat_input, dtype=torch.float32).unsqueeze(1)
-        feat_out = self.hff_lstm(feat_input)[0]
+        # feat_input = torch.tensor(feat_input, dtype=torch.float32).unsqueeze(1)
+        # feat_out = self.hff_lstm(feat_input)[0]
 
         # 线性变化
-        hidden_dim = feat_out.shape[-1]
-        feat_out = feat_out.reshape(-1, hidden_dim)
-        feat_out = self.feat_fc(feat_out)
+        # hidden_dim = feat_out.shape[-1]
+        # feat_out = feat_out.reshape(-1, hidden_dim)
+        feat_out = self.feat_fc(feat_input)
 
         # L2 归一化
         feat_out = feat_out / feat_out.norm(dim=1, keepdim=True)
@@ -113,5 +123,5 @@ class BiLSTMModel(nn.Module):
             logits_per_pred = logit_scale * combined_out @ preds_feat.t()   # 计算文本到预测的 logits
             return logits_per_x, logits_per_pmp, logits_per_pred
 
-        # 返回 logits
+        # 返回 outputs 和 losses
         return logits_per_x, logits_per_pmp
