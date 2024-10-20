@@ -18,7 +18,6 @@ config.task = ''
 config.data = edict()
 config.data.root = './dataset/'
 config.data.set = 'mitdb'
-config.data.seq_len = 15
 config.data.num_worker = 0
 config.data.input_type = ''
 config.data.test_id = 0
