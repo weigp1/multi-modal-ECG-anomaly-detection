@@ -51,12 +51,6 @@ class DataIter(data.IterableDataset):
 
 
     def _get_data(self, data_root, data_set, test_ratio=0.2, seed=None):
-
-        # data_x_pt = os.path.join(data_root, 'dataSet_' + data_set + '.csv')
-        # data_y_pt = os.path.join(data_root, 'labelSet_' + data_set + '.csv')
-        # data_hff_pt = os.path.join(data_root, 'featSet_' + data_set + '.csv')
-        # data_pmpt_pt = os.path.join(data_root, 'pmptSet_' + data_set + '.csv')
-
         data_x_pt = Path(data_root) / f'dataSet_{data_set}.csv'
         data_y_pt = Path(data_root) / f'labelSet_{data_set}.csv'
         data_hff_pt = Path(data_root) / f'featSet_{data_set}.csv'
@@ -92,10 +86,10 @@ class DataIter(data.IterableDataset):
         grouped_train_prmpt = []
 
         for g_id in range(4):
-            group_train_x = train_x[0 + g_id * group_size:(g_id + 1) * group_size]
-            group_train_y = train_y[0 + g_id * group_size:(g_id + 1) * group_size]
-            group_train_hff = train_hff[0 + g_id * group_size:(g_id + 1) * group_size]
-            group_train_prmpt = train_pmpt[0 + g_id * group_size:(g_id + 1) * group_size]
+            group_train_x = train_x[0 + g_id * group_size : (g_id + 1) * group_size]
+            group_train_y = train_y[0 + g_id * group_size : (g_id + 1) * group_size]
+            group_train_hff = train_hff[0 + g_id * group_size : (g_id + 1) * group_size]
+            group_train_prmpt = train_pmpt[0 + g_id * group_size : (g_id + 1) * group_size]
 
             grouped_train_x.append(group_train_x)
             grouped_train_y.append(group_train_y)
